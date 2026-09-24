@@ -1,0 +1,9 @@
+{
+  "name": "studyos-ai-backend",
+  "version": "1.0.0",
+  "description": "StudyOS AI FastAPI backend server",
+  "scripts": {
+    "dev": ".\\venv\\Scripts\\python -m uvicorn app.main:app --reload --port 8000",
+    "start": "npm run dev"
+  }
+}

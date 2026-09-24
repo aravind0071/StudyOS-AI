@@ -1,0 +1,12 @@
+{
+  "name": "studyos-ai-workspace",
+  "version": "1.0.0",
+  "description": "StudyOS AI Monorepo Workspace",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "dev:all": "start-all.bat",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "start": "npm run dev"
+  }
+}
