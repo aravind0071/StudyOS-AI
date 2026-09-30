@@ -9,7 +9,7 @@ import {
   Trash2, PanelLeftClose, PanelLeft, Clock, RefreshCw,
   ClipboardList, Network, Database, Cpu, Binary,
   Layers, ArrowRight, Search, Bookmark, Zap,
-  Volume2, Pause
+  Volume2, Pause, AlertTriangle
 } from "lucide-react";
 import { chatApi, materialsApi, getErrorMessage } from "@/lib/api";
 import { toast } from "sonner";
@@ -273,7 +273,7 @@ function SourceCard({ source }: { source: any }) {
           {source.material_title}
         </div>
         <div className="text-[9.5px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
-          {source.page_number ? (
+          {source.page_number && source.page_number > 0 ? (
             <span>Page {source.page_number}</span>
           ) : source.timestamp_start !== undefined && source.timestamp_start !== null ? (
             <span>
@@ -281,9 +281,9 @@ function SourceCard({ source }: { source: any }) {
               {String(Math.round(source.timestamp_start % 60)).padStart(2, "0")}
             </span>
           ) : (
-            <span>Verified Chunk</span>
+            <span>Course Material Section</span>
           )}
-          <span className="text-emerald-500 font-medium">• View</span>
+          <span className="text-emerald-500 font-medium">• Verified</span>
         </div>
       </div>
     </button>
@@ -296,12 +296,14 @@ function AssistantMessage({
   onPlaySpeech,
   isSpeakingThis,
   onStopSpeech,
+  onRegenerate,
 }: {
   msg: Message;
   onFollowUp: (prompt: string) => void;
   onPlaySpeech: (text: string, msgId: string) => void;
   isSpeakingThis: boolean;
   onStopSpeech: () => void;
+  onRegenerate?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [rating, setRating] = useState<"up" | "down" | null>(null);
@@ -321,13 +323,13 @@ function AssistantMessage({
   return (
     <div className="flex gap-3 animate-fadeIn">
       {/* Assistant Avatar */}
-      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-500 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-md shadow-emerald-500/20 ring-2 ring-emerald-500/20">
+      <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0 mt-0.5 text-white">
         <Brain className="w-4 h-4 text-white" />
       </div>
 
       <div className="flex-1 w-full min-w-0 space-y-2">
         {/* Main Assistant Card */}
-        <div className="p-4 sm:p-5 rounded-2xl rounded-tl-xs bg-white dark:bg-[#141d2d] border border-slate-200/80 dark:border-white/[0.08] shadow-sm backdrop-blur-sm w-full">
+        <div className="p-4 sm:p-5 rounded-xl bg-white dark:bg-[#0c121e] border border-slate-200 dark:border-white/[0.08] shadow-xs w-full">
           {/* Card Header with Level, Grounding & TTS Audio Lecture */}
           <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200/70 dark:border-white/[0.06] gap-2">
             <div className="flex items-center gap-2 min-w-0">
@@ -345,11 +347,11 @@ function AssistantMessage({
                 <button
                   type="button"
                   onClick={onStopSpeech}
-                  className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold shadow-xs animate-pulse"
+                  className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-medium shadow-xs"
                   title="Pause Audio Lecture"
                 >
                   <Pause className="w-2.5 h-2.5" />
-                  <span>Listening...</span>
+                  <span>Playing audio</span>
                 </button>
               ) : (
                 <button
@@ -364,12 +366,12 @@ function AssistantMessage({
               )}
 
               {msg.used_external ? (
-                <span className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full font-medium">
-                  <Info className="w-3 h-3" /> General AI Knowledge
+                <span className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full font-medium">
+                  <AlertTriangle className="w-3 h-3 text-amber-500" /> Not in Uploaded Notes · Curriculum Answer
                 </span>
               ) : (
                 <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full font-semibold">
-                  <CheckCircle2 className="w-3 h-3" /> Grounded in Vault
+                  <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Grounded in Uploaded Materials
                 </span>
               )}
             </div>
@@ -377,10 +379,17 @@ function AssistantMessage({
 
           {/* Formatted Markdown Content */}
           <div className="pt-0.5">
-            <MarkdownRenderer content={msg.content} />
+            {msg.content ? (
+              <MarkdownRenderer content={msg.content} />
+            ) : (
+              <div className="flex items-center gap-2 py-3 px-1 text-slate-500 dark:text-slate-400 text-xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                <span className="animate-pulse">Synthesizing verified academic answer...</span>
+              </div>
+            )}
           </div>
 
-          {/* Action Toolbar: Copy, Thumbs, Quick Follow-ups */}
+          {/* Action Toolbar: Copy, Regenerate, Thumbs, Quick Follow-ups */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-3 mt-3 border-t border-slate-200/60 dark:border-white/[0.06] text-xs">
             <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
               <button
@@ -392,6 +401,18 @@ function AssistantMessage({
                 {copied ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <ClipboardList className="w-3.5 h-3.5" />}
                 <span className="text-[11px] font-medium">{copied ? "Copied" : "Copy"}</span>
               </button>
+
+              {onRegenerate && (
+                <button
+                  type="button"
+                  onClick={onRegenerate}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white transition-colors"
+                  title="Regenerate this answer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-emerald-500" />
+                  <span className="text-[11px] font-medium hidden sm:inline">Regenerate</span>
+                </button>
+              )}
 
               <button
                 type="button"
@@ -484,6 +505,7 @@ export default function TutorPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorState, setErrorState] = useState<{ message: string; lastPrompt: string } | null>(null);
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [sessions, setSessions] = useState<ChatSessionItem[]>([]);
   const [sessionSearch, setSessionSearch] = useState("");
@@ -491,6 +513,7 @@ export default function TutorPage() {
   const [explainLevel, setExplainLevel] = useState("btech_student");
   const [showLevelPicker, setShowLevelPicker] = useState(false);
   const [selectedMarkDepth, setSelectedMarkDepth] = useState<number | null>(null);
+  const [studyMode, setStudyMode] = useState<"learn" | "exam" | "quiz" | "interview" | "revision" | "summary">("learn");
   const [selectedSubject, setSelectedSubject] = useState("all");
   const [materialsCount, setMaterialsCount] = useState<number | null>(null);
   const [isListening, setIsListening] = useState(false);
@@ -641,7 +664,20 @@ export default function TutorPage() {
     loadMaterialsCount();
 
     if (typeof window !== "undefined") {
-      const q = new URLSearchParams(window.location.search).get("q");
+      const urlParams = new URLSearchParams(window.location.search);
+      const q = urlParams.get("q");
+      const sub = urlParams.get("subject");
+      const mode = urlParams.get("mode");
+      const marks = urlParams.get("marks");
+
+      if (sub) setSelectedSubject(sub);
+      if (mode && ["learn", "exam", "quiz", "interview", "revision", "summary"].includes(mode)) {
+        setStudyMode(mode as any);
+      }
+      if (marks) {
+        setSelectedMarkDepth(parseInt(marks, 10));
+      }
+
       if (q) {
         setInput(q);
         setTimeout(() => textareaRef.current?.focus(), 150);
@@ -758,6 +794,7 @@ export default function TutorPage() {
     const content = (text || input).trim();
     if (!content || loading) return;
     setInput("");
+    setErrorState(null);
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -770,42 +807,145 @@ export default function TutorPage() {
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    const tempId = (Date.now() + 1).toString();
+    let currentAssistantId = tempId;
 
     try {
-      const { data } = await chatApi.send(content, sessionId, explainLevel);
-      if (data.session_id) {
-        setSessionId(data.session_id);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("studyos_active_chat_session_id", data.session_id);
-        }
-        loadSessions();
-      }
-
-      const assistantMsg: Message = {
-        id: data.message_id || Date.now().toString(),
+      // Add empty assistant placeholder message for real-time streaming
+      const initialAssistantMsg: Message = {
+        id: tempId,
         role: "assistant",
-        content: data.answer,
-        sources: data.sources,
-        used_external: data.used_external_knowledge,
-        explain_level: data.explain_level || explainLevel,
+        content: "",
+        sources: [],
+        used_external: false,
+        explain_level: explainLevel,
       };
-      setMessages(prev => [...prev, assistantMsg]);
+      setMessages(prev => [...prev, initialAssistantMsg]);
+
+      let streamedText = "";
+
+      await chatApi.stream(
+        {
+          message: content,
+          session_id: sessionId,
+          explain_level: explainLevel,
+          study_mode: studyMode,
+          marks: selectedMarkDepth ? String(selectedMarkDepth) : undefined,
+          subject: selectedSubject !== "all" ? selectedSubject : undefined,
+        },
+        (token) => {
+          streamedText += token;
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === tempId || m.id === currentAssistantId
+                ? { ...m, content: streamedText }
+                : m
+            )
+          );
+        },
+        (meta) => {
+          if (meta.session_id) {
+            setSessionId(meta.session_id);
+            if (typeof window !== "undefined") {
+              localStorage.setItem("studyos_active_chat_session_id", meta.session_id);
+            }
+            loadSessions();
+          }
+          if (meta.message_id) {
+            currentAssistantId = meta.message_id;
+          }
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === tempId || m.id === currentAssistantId
+                ? {
+                    ...m,
+                    id: currentAssistantId,
+                    content: streamedText.length > 0 ? streamedText : m.content,
+                    sources: meta.sources !== undefined ? meta.sources : m.sources,
+                    used_external:
+                      meta.used_external_knowledge !== undefined
+                        ? meta.used_external_knowledge
+                        : m.used_external,
+                  }
+                : m
+            )
+          );
+        },
+        controller.signal
+      );
+
+      // Lock in final streamed content
+      if (streamedText.length > 0) {
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === tempId || m.id === currentAssistantId
+              ? { ...m, id: currentAssistantId, content: streamedText }
+              : m
+          )
+        );
+      } else {
+        throw new Error("No response generated from stream");
+      }
     } catch (err: any) {
       if (err?.name === "AbortError" || err?.message === "canceled") {
         return;
       }
-      toast.error(getErrorMessage(err));
-      setMessages(prev => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: "I'm having trouble connecting to the AI service. Please ensure your backend is active.",
-        },
-      ]);
+      // If streaming fails, fallback smoothly to standard send endpoint
+      try {
+        const { data } = await chatApi.send(
+          content,
+          sessionId,
+          explainLevel,
+          studyMode,
+          selectedMarkDepth ? String(selectedMarkDepth) : undefined,
+          selectedSubject !== "all" ? selectedSubject : undefined
+        );
+        if (data.session_id) {
+          setSessionId(data.session_id);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("studyos_active_chat_session_id", data.session_id);
+          }
+          loadSessions();
+        }
+
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === tempId || m.id === currentAssistantId
+              ? {
+                  ...m,
+                  id: data.message_id || currentAssistantId,
+                  content: data.answer,
+                  sources: data.sources,
+                  used_external: data.used_external_knowledge,
+                  explain_level: data.explain_level || explainLevel,
+                }
+              : m
+          )
+        );
+      } catch (fallbackErr: any) {
+        setMessages(prev => prev.filter(m => (m.id !== tempId && m.id !== currentAssistantId) || m.content.length > 0));
+        const errMsg = getErrorMessage(fallbackErr);
+        toast.error(errMsg);
+        setErrorState({ message: errMsg, lastPrompt: content });
+      }
     } finally {
       setLoading(false);
       abortControllerRef.current = null;
+    }
+  };
+
+  const handleRegenerate = (assistantMsg: Message) => {
+    if (loading) return;
+    const idx = messages.findIndex(m => m.id === assistantMsg.id);
+    if (idx >= 0) {
+      for (let i = idx - 1; i >= 0; i--) {
+        if (messages[i].role === "user") {
+          const userQuery = messages[i].content;
+          setMessages(prev => prev.filter(m => m.id !== assistantMsg.id));
+          sendMessage(userQuery);
+          return;
+        }
+      }
     }
   };
 
@@ -845,9 +985,9 @@ export default function TutorPage() {
             <button
               type="button"
               onClick={startNewChat}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 hover:shadow-emerald-500/35 hover:scale-[1.01] active:scale-[0.99]"
+              className="flex-1 flex items-center justify-center gap-2 py-2 px-3 btn-primary text-xs font-semibold rounded-lg"
             >
-              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <Plus className="w-4 h-4" />
               <span>New Chat</span>
             </button>
             <button
@@ -892,7 +1032,10 @@ export default function TutorPage() {
                 <p className="text-[11px] text-slate-400 mt-0.5">Ask a question to start!</p>
               </div>
               <div className="p-2.5 rounded-xl bg-emerald-500/5 border border-emerald-500/15 text-[10.5px] text-slate-500 dark:text-slate-400 text-left mt-3">
-                <span className="font-bold text-emerald-500">💡 Exam Tip:</span> Ask for <strong>10 marks depth</strong> to receive complete worked numericals with rubric formatting.
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1 mr-1">
+                  <Lightbulb className="w-3 h-3 text-emerald-500" /> Exam Tip:
+                </span>
+                Ask for <strong>10 marks depth</strong> to receive complete worked numericals with rubric formatting.
               </div>
             </div>
           ) : (
@@ -946,12 +1089,12 @@ export default function TutorPage() {
             </button>
 
             <div className="min-w-0 flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-500 flex items-center justify-center shadow-xs flex-shrink-0 ring-2 ring-emerald-500/10">
+              <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0 text-white">
                 <Brain className="w-4 h-4 text-white" />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2 truncate">
-                  <h1 className="text-sm sm:text-base font-black text-slate-900 dark:text-white leading-tight truncate">
+                  <h1 className="text-sm sm:text-base font-semibold tracking-tight text-slate-900 dark:text-white leading-tight truncate">
                     AI Tutor & Intelligence
                   </h1>
                   <span className="text-[10px] text-emerald-500 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full hidden sm:inline-flex items-center gap-1">
@@ -963,8 +1106,8 @@ export default function TutorPage() {
                   <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
                   <span>
                     {materialsCount !== null && materialsCount > 0
-                      ? `Neural Vault Connected · Grounded in ${materialsCount} materials`
-                      : "Neural Vault Synced · Ready for syllabus grounding"}
+                      ? `Knowledge Vault Active · ${materialsCount} course ${materialsCount === 1 ? "file" : "files"} indexed`
+                      : "Knowledge Vault Ready · Upload course materials to ground answers"}
                   </span>
                 </div>
               </div>
@@ -1055,27 +1198,23 @@ export default function TutorPage() {
         <div className="flex-1 min-h-0 overflow-y-auto px-2 sm:px-4 md:px-6 py-4 w-full scroll-smooth flex flex-col space-y-4 relative">
           {messages.length === 0 ? (
             <div className="relative my-auto py-6 sm:py-10 flex flex-col items-center justify-center text-center w-full max-w-5xl mx-auto px-2">
-              {/* Ambient Radial Mesh Glow */}
-              <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 sm:w-[540px] h-96 sm:h-[380px] bg-gradient-to-tr from-emerald-500/15 via-teal-500/10 to-indigo-500/10 rounded-full blur-3xl pointer-events-none -z-10" />
-
-              {/* Version & Copilot Badge */}
-              <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold tracking-wide uppercase mb-3 shadow-xs">
-                <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-                <span>Neural Academic Copilot · v2.5</span>
+              {/* Version & Status Badge */}
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[11px] font-medium tracking-wide mb-3">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Academic Assistant · Ready to help</span>
               </div>
 
               {/* Glowing Brain Avatar */}
               <div className="relative mb-3 group cursor-default">
-                <div className="absolute -inset-1.5 rounded-3xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-500 opacity-30 group-hover:opacity-60 blur-md transition-all duration-500" />
-                <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-500 flex items-center justify-center shadow-xl shadow-emerald-500/25 ring-4 ring-emerald-500/10 transition-transform group-hover:scale-105 duration-300">
-                  <Brain className="w-8 h-8 text-white drop-shadow" />
+                <div className="w-14 h-14 rounded-2xl bg-emerald-600 flex items-center justify-center text-white shadow-sm ring-4 ring-emerald-500/10">
+                  <Brain className="w-7 h-7 text-white" />
                 </div>
               </div>
 
               {/* Main Headline */}
-              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight leading-tight mb-2">
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight leading-tight mb-2">
                 Master Any Concept with{" "}
-                <span className="bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 bg-clip-text text-transparent">
+                <span className="text-emerald-600 dark:text-emerald-400">
                   StudyOS Intelligence
                 </span>
               </h2>
@@ -1164,7 +1303,7 @@ export default function TutorPage() {
               {messages.map(msg =>
                 msg.role === "user" ? (
                   <div key={msg.id} className="flex justify-end gap-3 animate-fadeIn">
-                    <div className="max-w-[85%] rounded-2xl rounded-tr-xs px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-500/10">
+                    <div className="max-w-[80%] rounded-xl px-4 py-2.5 bg-slate-900 text-white dark:bg-emerald-600 dark:text-white shadow-xs">
                       <div className="text-xs sm:text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</div>
                     </div>
                   </div>
@@ -1179,20 +1318,47 @@ export default function TutorPage() {
                     onPlaySpeech={playSpeech}
                     isSpeakingThis={speakingMsgId === msg.id}
                     onStopSpeech={stopSpeech}
+                    onRegenerate={() => handleRegenerate(msg)}
                   />
                 )
               )}
 
-              {loading && (
+              {loading && messages.length > 0 && messages[messages.length - 1]?.role === "user" && (
                 <div className="flex gap-3 animate-fadeIn">
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-500 flex items-center justify-center flex-shrink-0 shadow-md shadow-emerald-500/15 ring-2 ring-emerald-500/20">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0 text-white shadow-xs">
                     <Brain className="w-4 h-4 text-white" />
                   </div>
                   <div className="p-3 sm:p-4 rounded-2xl rounded-tl-xs bg-white dark:bg-[#141b2a] border border-slate-200/80 dark:border-white/[0.08] flex items-center gap-2.5 shadow-xs">
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" />
                     <span className="text-slate-600 dark:text-slate-400 text-xs font-medium">
-                      Synthesizing academic answer, checking formulas, and formatting for marks rubric...
+                      Retrieving syllabus notes, checking formulas & streaming answer...
                     </span>
+                  </div>
+                </div>
+              )}
+
+              {errorState && (
+                <div className="flex gap-3 animate-fadeIn">
+                  <div className="w-7 h-7 rounded-lg bg-rose-600 flex items-center justify-center flex-shrink-0 text-white shadow-xs">
+                    <AlertTriangle className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="p-3.5 sm:p-4 rounded-2xl rounded-tl-xs bg-rose-50/90 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 text-xs text-rose-800 dark:text-rose-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs w-full">
+                    <div>
+                      <p className="font-semibold text-xs mb-0.5">Response Generation Failed</p>
+                      <p className="text-[11px] opacity-90">{errorState.message}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const p = errorState.lastPrompt;
+                        setErrorState(null);
+                        sendMessage(p);
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-medium text-xs transition-colors flex-shrink-0 shadow-xs cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Retry Question</span>
+                    </button>
                   </div>
                 </div>
               )}
@@ -1203,30 +1369,60 @@ export default function TutorPage() {
 
         {/* ── 3. BOTTOM COMPOSER DOCK (Full Width Fitted to Screen) ────────────── */}
         <div className="flex-shrink-0 px-1 sm:px-3 pb-2 pt-1 w-full max-w-full min-w-0 space-y-1.5">
-          {/* Quick Actions Pills Bar */}
-          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 scrollbar-none w-full min-w-0 max-w-full">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex-shrink-0 mr-0.5 flex items-center gap-1">
-              <Zap className="w-3 h-3 text-amber-500" />
-              Quick:
+          {/* AI Study Modes & Quick Actions Toolbar */}
+          <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none w-full min-w-0 max-w-full text-xs">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex-shrink-0 mr-1 flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-emerald-500" />
+              Mode:
             </span>
-            {QUICK_ACTIONS.map(qa => {
+            {[
+              { id: "learn", label: "Learn", icon: Lightbulb },
+              { id: "exam", label: "Exam Rubric", icon: GraduationCap },
+              { id: "quiz", label: "Quiz", icon: QuizIcon },
+              { id: "interview", label: "Interview", icon: Mic },
+              { id: "revision", label: "Revision", icon: Zap },
+              { id: "summary", label: "Summary", icon: FileText },
+            ].map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => {
+                  setStudyMode(m.id as any);
+                  if (m.id === "exam" && !selectedMarkDepth) setSelectedMarkDepth(5);
+                  toast.success(`Active Mode: ${m.label}`);
+                }}
+                className={clsx(
+                  "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap flex-shrink-0 border",
+                  studyMode === m.id
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-semibold"
+                    : "bg-slate-100 dark:bg-white/[0.04] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/[0.06] hover:text-slate-900 dark:hover:text-white"
+                )}
+              >
+                <m.icon className="w-3 h-3" />
+                <span>{m.label}</span>
+              </button>
+            ))}
+
+            <div className="w-px h-3.5 bg-slate-300 dark:bg-slate-700 mx-1 flex-shrink-0" />
+
+            {QUICK_ACTIONS.slice(0, 4).map(qa => {
               const Icon = qa.icon;
               return (
                 <button
                   key={qa.label}
                   type="button"
                   onClick={() => handleQuickAction(qa)}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 dark:bg-white/[0.05] hover:bg-emerald-500/15 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 border border-slate-200 dark:border-white/[0.08] hover:border-emerald-500/30 rounded-xl text-[11px] font-medium transition-all whitespace-nowrap shadow-xs flex-shrink-0"
+                  className="flex items-center gap-1 px-2 py-0.5 bg-slate-50 dark:bg-white/[0.02] hover:bg-slate-100 dark:hover:bg-white/[0.06] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200/80 dark:border-white/[0.05] rounded-md text-[11px] font-medium transition-colors whitespace-nowrap flex-shrink-0"
                 >
-                  <Icon className={clsx("w-3 h-3", qa.color)} />
+                  <Icon className="w-3 h-3" />
                   <span>{qa.label}</span>
                 </button>
               );
             })}
           </div>
 
-          {/* Main ChatGPT-style Card Container with Emerald Focus Ring - Full Width */}
-          <div className="relative flex flex-col bg-white dark:bg-[#1a2130] rounded-[22px] border border-slate-200 dark:border-white/[0.12] focus-within:border-emerald-500/50 dark:focus-within:border-emerald-500/50 focus-within:shadow-[0_0_20px_rgba(16,185,129,0.12)] shadow-lg shadow-black/5 dark:shadow-black/40 transition-all p-2.5 sm:px-4 sm:pt-3 sm:pb-2.5 w-full min-w-0 max-w-full">
+          {/* Main Composer Box */}
+          <div className="relative flex flex-col bg-white dark:bg-[#0c121e] rounded-xl border border-slate-200 dark:border-white/[0.1] focus-within:border-emerald-500/60 dark:focus-within:border-emerald-500/60 focus-within:ring-1 focus-within:ring-emerald-500/20 shadow-xs transition-colors p-2.5 sm:px-3.5 sm:py-2.5 w-full min-w-0 max-w-full">
             {/* Top: Auto-expanding textarea line after line */}
             <textarea
               ref={textareaRef}

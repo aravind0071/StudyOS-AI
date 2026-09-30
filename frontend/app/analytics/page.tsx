@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import {
   BarChart3, TrendingUp, Brain, Target, Clock, Award,
-  BarChart, LineChart
+  BarChart, LineChart, CheckCircle2, AlertCircle
 } from "lucide-react";
 import { analyticsApi } from "@/lib/api";
 import {
@@ -13,16 +13,18 @@ import {
 } from "recharts";
 import clsx from "clsx";
 
-function StatCard({ label, value, icon: Icon, color, suffix = "" }: any) {
+function StatCard({ label, value, icon: Icon, colorClass, suffix = "" }: any) {
   return (
-    <div className="card p-5">
+    <div className="card p-5 border border-slate-200 dark:border-white/[0.08]">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-slate-500 dark:text-slate-400 text-sm font-medium">{label}</span>
-        <div className={`w-8 h-8 rounded-lg ${color} flex items-center justify-center`}>
-          <Icon className="w-4 h-4 text-white" />
+        <span className="text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider">{label}</span>
+        <div className={`w-8 h-8 rounded-lg ${colorClass} flex items-center justify-center shrink-0`}>
+          <Icon className="w-4 h-4" />
         </div>
       </div>
-      <div className="text-3xl font-black text-slate-900 dark:text-white">{value}<span className="text-slate-400 text-lg font-normal">{suffix}</span></div>
+      <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+        {value}<span className="text-slate-400 text-base font-normal ml-0.5">{suffix}</span>
+      </div>
     </div>
   );
 }
@@ -54,20 +56,20 @@ export default function AnalyticsPage() {
   })) || [];
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-6 animate-fadeIn pb-12">
       <div>
-        <h1 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-          <BarChart3 className="w-5 h-5 text-emerald-500" /> My Progress
+        <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <BarChart3 className="w-5 h-5 text-emerald-500" /> Progress & Performance
         </h1>
-        <p className="text-slate-500 dark:text-slate-400 text-sm">Track your learning journey and identify areas to improve.</p>
+        <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">Track your learning journey and identify areas to improve.</p>
       </div>
 
       {/* Stats */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Knowledge Score" value={data?.knowledge_score?.toFixed(1) || 0} icon={Brain} color="bg-emerald-500" suffix="%" />
-        <StatCard label="Exam Readiness" value={data?.exam_readiness?.toFixed(1) || 0} icon={Target} color="bg-sky-500" suffix="%" />
-        <StatCard label="Quiz Accuracy" value={data?.quiz_accuracy?.toFixed(1) || 0} icon={Award} color="bg-purple-500" suffix="%" />
-        <StatCard label="Materials" value={data?.material_count || 0} icon={Clock} color="bg-amber-500" />
+        <StatCard label="Knowledge Score" value={data?.knowledge_score?.toFixed(1) || 0} icon={Brain} colorClass="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" suffix="%" />
+        <StatCard label="Exam Readiness" value={data?.exam_readiness?.toFixed(1) || 0} icon={Target} colorClass="bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20" suffix="%" />
+        <StatCard label="Quiz Accuracy" value={data?.quiz_accuracy?.toFixed(1) || 0} icon={Award} colorClass="bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20" suffix="%" />
+        <StatCard label="Materials" value={data?.material_count || 0} icon={Clock} colorClass="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20" />
       </div>
 
       {/* Charts */}
@@ -120,7 +122,7 @@ export default function AnalyticsPage() {
       <div className="grid md:grid-cols-2 gap-6">
         <div className="card p-6">
           <h2 className="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-            <span className="text-emerald-500">✓</span> Strong Areas
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Strong Areas
           </h2>
           {!data?.strong_concepts?.length ? (
             <p className="text-slate-500 text-sm">Complete quizzes to identify your strong areas.</p>
@@ -137,7 +139,7 @@ export default function AnalyticsPage() {
         </div>
         <div className="card p-6">
           <h2 className="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-            <span className="text-rose-500">⚠</span> Needs Improvement
+            <AlertCircle className="w-4 h-4 text-rose-500" /> Needs Improvement
           </h2>
           {!data?.weak_concepts?.length ? (
             <p className="text-slate-500 text-sm">No weak areas detected. Keep taking quizzes!</p>

@@ -152,14 +152,17 @@ def _get_fallback_questions(topics: list[str], difficulty: str, quiz_type: str, 
     return results
 
 
+from app.services.quiz_engine import generate_adaptive_quiz_questions
+
+
 @router.post("/generate")
 def generate_quiz(
     payload: GenerateQuizRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Generate a new adaptive quiz from the student's materials."""
-    questions_data = _generate_questions_via_llm(
+    """Generate a new adaptive quiz from the student's materials and curriculum."""
+    questions_data = generate_adaptive_quiz_questions(
         topics=payload.topics,
         subject=payload.subject,
         difficulty=payload.difficulty,
@@ -168,14 +171,6 @@ def generate_quiz(
         user_id=str(current_user.id),
         db=db,
     )
-
-    if not questions_data:
-        questions_data = _get_fallback_questions(
-            topics=payload.topics,
-            difficulty=payload.difficulty,
-            quiz_type=payload.quiz_type,
-            num_questions=payload.num_questions,
-        )
 
     # Create quiz record
     diff_map = {"easy": DifficultyLevel.EASY, "medium": DifficultyLevel.MEDIUM, "hard": DifficultyLevel.HARD}

@@ -6,7 +6,7 @@ import {
   Brain, Upload, Zap, Target, BookOpen, BarChart3,
   MessageSquare, Network, Shield, ChevronRight, Star,
   FileText, Mic, Video, Globe, Image as ImageIcon, ArrowRight,
-  CheckCircle, Sparkles, TrendingUp, Clock, Award, Users
+  CheckCircle, Sparkles, TrendingUp, Clock, Award, Users, LayoutDashboard
 } from "lucide-react";
 import { ISTClockBadge } from "@/components/ui/ISTClockBadge";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
@@ -27,19 +27,35 @@ function DashboardPreview() {
       <div className="flex">
         {/* Mini sidebar */}
         <div className="w-14 bg-slate-950 border-r border-white/5 p-2 flex flex-col gap-2 items-center py-4">
-          {["🏠","📚","🤖","🧠","📝","📊"].map((icon, i) => (
-            <div key={i} className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm
-              ${i === 0 ? "bg-emerald-500/20 border border-emerald-500/30" : "hover:bg-white/5"}`}>
-              {icon}
-            </div>
-          ))}
+          {[
+            { icon: LayoutDashboard, active: true },
+            { icon: BookOpen, active: false },
+            { icon: Brain, active: false },
+            { icon: Target, active: false },
+            { icon: FileText, active: false },
+            { icon: BarChart3, active: false },
+          ].map((item, i) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={i}
+                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                  item.active
+                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                    : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+              </div>
+            );
+          })}
         </div>
         {/* Main content */}
         <div className="flex-1 p-4 space-y-3">
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-white text-sm font-semibold">Good morning, Arjun ☀️</div>
+              <div className="text-white text-sm font-semibold">Good morning, Arjun</div>
               <div className="text-slate-400 text-xs">What would you like to learn today?</div>
             </div>
             <div className="flex items-center gap-1 text-xs text-amber-400 bg-amber-400/10 px-2 py-1 rounded-full">
@@ -162,14 +178,14 @@ export default function LandingPage() {
     <div className="min-h-screen bg-slate-50 dark:bg-[#07090e] text-slate-900 dark:text-slate-100 overflow-x-hidden transition-colors duration-200">
       {/* ── Navbar ─────────────────────────────────────────────────────────── */}
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300
-        ${scrollY > 20 ? "bg-white/85 dark:bg-[#07090e]/85 backdrop-blur-xl shadow-md dark:shadow-2xl border-b border-slate-200 dark:border-white/[0.08]" : "bg-transparent"}`}>
+        ${scrollY > 20 ? "bg-white/90 dark:bg-[#07090e]/90 backdrop-blur-md shadow-sm border-b border-slate-200 dark:border-white/[0.08]" : "bg-transparent"}`}>
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-lg flex items-center justify-center shadow-sm">
+            <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center shadow-sm">
               <Brain className="w-5 h-5 text-white" />
             </div>
             <span className="font-bold text-slate-900 dark:text-white text-lg tracking-tight">
-              StudyOS <span className="gradient-text">AI</span>
+              StudyOS <span className="text-emerald-500">AI</span>
             </span>
           </div>
           <div className="hidden md:flex items-center gap-8">
@@ -193,59 +209,50 @@ export default function LandingPage() {
       </nav>
 
       {/* ── Hero Section ───────────────────────────────────────────────────── */}
-      <section className="relative hero-gradient min-h-screen flex items-center pt-16">
-        {/* Background glow effects */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
-
+      <section className="relative min-h-screen flex items-center pt-16">
         <div className="max-w-7xl mx-auto px-6 py-20 grid lg:grid-cols-2 gap-12 items-center">
           <div className="animate-fadeIn">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-sm font-medium mb-6">
-              <Sparkles className="w-4 h-4 text-emerald-500" />
-              AI-Powered Learning Platform
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs font-semibold mb-6">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+              AI-Powered Student Productivity Workspace
             </div>
 
-            <h1 className="text-5xl lg:text-6xl xl:text-7xl font-black text-slate-900 dark:text-white leading-[1.05] mb-4">
-              STUDYOS
-              <span className="block gradient-text">AI</span>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-slate-900 dark:text-white leading-[1.1] mb-4">
+              Your Knowledge.<br />
+              Your AI Tutor.<br />
+              <span className="text-emerald-600 dark:text-emerald-400">All in One Workspace.</span>
             </h1>
 
-            {/* Live IST Time & Date down under StudyOS AI */}
+            {/* Live IST Time & Date */}
             <div className="mb-6">
               <ISTClockBadge />
             </div>
 
-            <p className="text-xl lg:text-2xl text-slate-800 dark:text-white/90 font-medium mb-4 leading-snug">
-              Your Knowledge.<br />
-              Your Tutor.<br />
-              Your Learning Intelligence.
+            <p className="text-slate-600 dark:text-slate-400 text-base lg:text-lg mb-8 max-w-xl leading-relaxed">
+              Turn your lecture notes, PDFs, syllabus, and study materials into a personalized AI learning workspace with grounded explanations, smart study plans, and diagnostic quizzes.
             </p>
 
-            <p className="text-slate-600 dark:text-slate-400 text-base lg:text-lg mb-10 max-w-xl leading-relaxed">
-              Turn your scattered notes, lectures and study materials into one intelligent learning system with AI-powered tutoring, knowledge graphs, and adaptive quizzes.
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col sm:flex-row gap-3">
               <Link href="/auth?tab=register"
-                className="btn-primary text-base px-8 py-3.5 shadow-lg shadow-emerald-500/25">
+                className="btn-primary text-sm px-6 py-3 shadow-md shadow-emerald-500/20 font-semibold flex items-center justify-center gap-2">
                 Start Learning Free
-                <ArrowRight className="w-5 h-5" />
+                <ArrowRight className="w-4 h-4" />
               </Link>
               <a href="#how-it-works"
-                className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl border border-slate-300 dark:border-white/20 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5 font-semibold text-base transition-all duration-200">
+                className="btn-secondary text-sm px-6 py-3 font-semibold flex items-center justify-center gap-2">
                 Explore Features
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="w-4 h-4" />
               </a>
             </div>
 
             <div className="flex items-center gap-6 mt-10">
               {[
-                { icon: Users, label: "10K+ Students" },
-                { icon: Star, label: "4.9 Rating" },
-                { icon: Award, label: "Free Forever" },
+                { icon: Users, label: "University Ready" },
+                { icon: Star, label: "Strict Grounded AI" },
+                { icon: Award, label: "Free for Students" },
               ].map(({ icon: Icon, label }) => (
-                <div key={label} className="flex items-center gap-2 text-slate-600 dark:text-slate-400 text-sm">
-                  <Icon className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+                <div key={label} className="flex items-center gap-2 text-slate-600 dark:text-slate-400 text-xs sm:text-sm font-medium">
+                  <Icon className="w-4 h-4 text-emerald-500 shrink-0" />
                   {label}
                 </div>
               ))}
@@ -253,7 +260,7 @@ export default function LandingPage() {
           </div>
 
           {/* Dashboard Preview */}
-          <div className="animate-float hidden lg:block">
+          <div className="hidden lg:block">
             <DashboardPreview />
           </div>
         </div>
@@ -500,9 +507,9 @@ export default function LandingPage() {
       {/* ── CTA Section ───────────────────────────────────────────────────── */}
       <section className="py-24 hero-gradient">
         <div className="max-w-4xl mx-auto px-6 text-center">
-          <h2 className="text-4xl lg:text-5xl font-black text-slate-900 dark:text-white mb-6">
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-slate-900 dark:text-white mb-6">
             Ready to Transform<br />
-            <span className="gradient-text">How You Study?</span>
+            <span className="text-emerald-600 dark:text-emerald-400">How You Study?</span>
           </h2>
           <p className="text-slate-600 dark:text-slate-400 text-lg mb-10 max-w-xl mx-auto">
             Join thousands of students who turned scattered materials into a personalized learning system.

@@ -86,6 +86,13 @@ class User(Base):
     concept_masteries = relationship("UserConceptMastery", back_populates="user")
     interview_sessions = relationship("InterviewSession", back_populates="user")
     otp_verifications = relationship("OTPVerification", back_populates="user")
+    subjects = relationship("Subject", back_populates="user", cascade="all, delete-orphan")
+    resources = relationship("Resource", back_populates="user", cascade="all, delete-orphan")
+    exams = relationship("Exam", back_populates="user", cascade="all, delete-orphan")
+    study_sessions = relationship("StudySession", back_populates="user", cascade="all, delete-orphan")
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    notification_settings = relationship("UserNotificationSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    notes = relationship("Note", back_populates="user", cascade="all, delete-orphan")
 
 
 class Profile(Base):
@@ -413,3 +420,172 @@ class InterviewQuestion(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     session = relationship("InterviewSession", back_populates="questions")
+
+
+# ─── SUBJECTS & UNITS ────────────────────────────────────────────────────────
+
+class Subject(Base):
+    __tablename__ = "subjects"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name = Column(String(200), nullable=False)
+    code = Column(String(50), nullable=True)
+    description = Column(Text, nullable=True)
+    icon = Column(String(50), default="📚")
+    color = Column(String(50), default="indigo")
+    target_exam_date = Column(DateTime(timezone=True), nullable=True)
+    progress_percent = Column(Float, default=0.0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="subjects")
+    units = relationship("Unit", back_populates="subject", cascade="all, delete-orphan", order_by="Unit.unit_number")
+    resources = relationship("Resource", back_populates="subject", cascade="all, delete-orphan")
+
+
+class Unit(Base):
+    __tablename__ = "units"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    subject_id = Column(String(36), ForeignKey("subjects.id", ondelete="CASCADE"), index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    unit_number = Column(Integer, nullable=False, default=1)
+    title = Column(String(300), nullable=False)
+    description = Column(Text, nullable=True)
+    progress_percent = Column(Float, default=0.0)
+    is_completed = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    subject = relationship("Subject", back_populates="units")
+    resources = relationship("Resource", back_populates="unit", cascade="all, delete-orphan")
+
+
+class Resource(Base):
+    __tablename__ = "resources"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    subject_id = Column(String(36), ForeignKey("subjects.id", ondelete="CASCADE"), index=True)
+    unit_id = Column(String(36), ForeignKey("units.id", ondelete="SET NULL"), nullable=True, index=True)
+    title = Column(String(500), nullable=False)
+    resource_type = Column(String(50), nullable=False)  # image, video, lecture, youtube, pdf, document, notes, external_link
+    description = Column(Text, nullable=True)
+    url = Column(String(2000), nullable=True)
+    thumbnail_url = Column(String(1000), nullable=True)
+    file_path = Column(String(1000), nullable=True)
+    file_size_bytes = Column(Integer, nullable=True)
+    file_type = Column(String(100), nullable=True)
+    tags = Column(JSON, default=list)
+    owner_name = Column(String(200), nullable=True)
+    processing_status = Column(String(50), default="ready")  # uploading, processing, extracting, ready, failed
+    processing_error = Column(Text, nullable=True)
+    material_id = Column(String(36), ForeignKey("materials.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="resources")
+    subject = relationship("Subject", back_populates="resources")
+    unit = relationship("Unit", back_populates="resources")
+
+
+# ─── NOTES ────────────────────────────────────────────────────────────────────
+
+class Note(Base):
+    __tablename__ = "notes"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    subject_id = Column(String(36), ForeignKey("subjects.id", ondelete="SET NULL"), nullable=True, index=True)
+    unit_id = Column(String(36), ForeignKey("units.id", ondelete="SET NULL"), nullable=True, index=True)
+    title = Column(String(300), nullable=False)
+    content = Column(Text, nullable=False)
+    tags = Column(JSON, default=list)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="notes")
+
+
+# ─── EXAMS ────────────────────────────────────────────────────────────────────
+
+class Exam(Base):
+    __tablename__ = "exams"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    subject_id = Column(String(36), ForeignKey("subjects.id", ondelete="SET NULL"), nullable=True)
+    subject_name = Column(String(200), nullable=False)
+    exam_date = Column(DateTime(timezone=True), nullable=False)
+    exam_time = Column(String(100), nullable=True)
+    recommended_topics = Column(JSON, default=list)
+    reminder_2day_sent = Column(Boolean, default=False)
+    reminder_1day_sent = Column(Boolean, default=False)
+    reminder_examday_sent = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="exams")
+
+
+# ─── STUDY SESSIONS & REMINDERS ───────────────────────────────────────────────
+
+class StudySession(Base):
+    __tablename__ = "study_sessions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    subject_id = Column(String(36), ForeignKey("subjects.id", ondelete="SET NULL"), nullable=True)
+    subject_name = Column(String(200), nullable=False)
+    unit_name = Column(String(200), nullable=True)
+    session_date = Column(DateTime(timezone=True), nullable=False)
+    start_time = Column(String(50), nullable=False)  # e.g. "07:00 PM"
+    end_time = Column(String(50), nullable=False)    # e.g. "09:00 PM"
+    reminder_lead_minutes = Column(Integer, default=15)
+    reminder_sent = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="study_sessions")
+
+
+# ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    title = Column(String(300), nullable=False)
+    message = Column(Text, nullable=False)
+    category = Column(String(50), default="study")  # security, study, exam, ai, vault
+    is_read = Column(Boolean, default=False)
+    link = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="notifications")
+
+
+# ─── USER NOTIFICATION SETTINGS ───────────────────────────────────────────────
+
+class UserNotificationSettings(Base):
+    __tablename__ = "user_notification_settings"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
+    email_notifications = Column(Boolean, default=True)
+    login_alerts = Column(Boolean, default=True)
+    study_reminders = Column(Boolean, default=True)
+    exam_reminders = Column(Boolean, default=True)
+    study_plan_reminders = Column(Boolean, default=True)
+    in_app_notifications = Column(Boolean, default=True)
+    reminder_minutes_before = Column(Integer, default=15)
+    exam_reminder_2days = Column(Boolean, default=True)
+    exam_reminder_1day = Column(Boolean, default=True)
+    exam_reminder_day_of = Column(Boolean, default=True)
+    timezone = Column(String(100), default="Asia/Kolkata")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="notification_settings")

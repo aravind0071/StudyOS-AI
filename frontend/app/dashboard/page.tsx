@@ -8,9 +8,9 @@ import {
   TrendingUp, Zap, Award, Target, BookOpen, AlertTriangle,
   CheckCircle2, Circle, ArrowRight, FileText, Clock,
   Sparkles, Send, Network, Mic, Check, Flame, ChevronRight,
-  ShieldCheck, RefreshCw, Lightbulb, ExternalLink
+  ShieldCheck, RefreshCw, Lightbulb, ExternalLink, Layers, BookMarked
 } from "lucide-react";
-import { analyticsApi, studyPlanApi, materialsApi, profileApi } from "@/lib/api";
+import { analyticsApi, studyPlanApi, materialsApi, profileApi, subjectsApi, remindersApi, chatApi } from "@/lib/api";
 import { getStoredUser, saveUser } from "@/lib/auth";
 import { toast } from "sonner";
 import clsx from "clsx";
@@ -36,23 +36,23 @@ function MetricCard({
   subtitle?: string;
 }) {
   return (
-    <div className="card p-5 flex flex-col justify-between relative overflow-hidden group hover:border-emerald-500/40 hover:-translate-y-0.5 transition-all duration-200">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider">
+    <div className="card p-4 sm:p-5 flex flex-col justify-between">
+      <div className="flex items-center justify-between mb-2.5">
+        <span className="text-slate-500 dark:text-slate-400 text-xs font-medium">
           {label}
         </span>
-        <div className={`w-9 h-9 rounded-xl ${color} flex items-center justify-center shadow-xs group-hover:scale-110 transition-transform`}>
-          <Icon className="w-4 h-4 text-white" />
+        <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-slate-300 flex items-center justify-center">
+          <Icon className="w-3.5 h-3.5" />
         </div>
       </div>
 
       <div>
         <div className="flex items-baseline gap-1">
-          <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+          <span className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
             {value}
           </span>
           {suffix && (
-            <span className="text-lg font-bold text-slate-400 dark:text-slate-500">
+            <span className="text-sm font-semibold text-slate-400 dark:text-slate-500">
               {suffix}
             </span>
           )}
@@ -63,7 +63,7 @@ function MetricCard({
             {subtitle || "Real-time AI metrics"}
           </span>
           {badgeText && (
-            <span className={clsx("text-[10px] font-bold px-2 py-0.5 rounded-full border", badgeColor)}>
+            <span className={clsx("text-[10px] font-semibold px-1.5 py-0.2 rounded border", badgeColor)}>
               {badgeText}
             </span>
           )}
@@ -92,17 +92,17 @@ function StudioLauncher({
   return (
     <Link
       href={href}
-      className="card p-4 flex items-center gap-3.5 hover:border-emerald-500/40 hover:-translate-y-0.5 transition-all duration-200 group relative overflow-hidden"
+      className="card p-3.5 flex items-center gap-3 hover:border-slate-300 dark:hover:border-white/20 transition-colors group"
     >
-      <div className={`w-11 h-11 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0 shadow-sm group-hover:scale-110 transition-transform duration-200`}>
-        <Icon className="w-5 h-5 text-white" />
+      <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-slate-200 flex items-center justify-center flex-shrink-0 group-hover:text-emerald-500 transition-colors">
+        <Icon className="w-4 h-4" />
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors truncate">
+          <span className="text-xs font-semibold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors truncate">
             {title}
           </span>
-          <ArrowRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+          <ArrowRight className="w-3 h-3 text-slate-400 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
         </div>
         <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
           {desc}
@@ -181,6 +181,11 @@ export default function DashboardPage() {
     return "Good evening";
   };
 
+  const [subjects, setSubjects] = useState<any[]>([]);
+  const [upcomingExams, setUpcomingExams] = useState<any[]>([]);
+  const [upcomingSession, setUpcomingSession] = useState<any>(null);
+  const [recentChats, setRecentChats] = useState<any[]>([]);
+
   useEffect(() => {
     // Load daily tasks from storage
     try {
@@ -216,11 +221,21 @@ export default function DashboardPage() {
       analyticsApi.getOverview().catch(() => null),
       studyPlanApi.getActive().catch(() => null),
       materialsApi.list().catch(() => null),
+      subjectsApi.list().catch(() => null),
+      remindersApi.getExams().catch(() => null),
+      remindersApi.getSessions({ upcoming_only: true }).catch(() => null),
+      chatApi.getSessions().catch(() => null),
     ])
-      .then(([analyticsRes, planRes, materialsRes]) => {
+      .then(([analyticsRes, planRes, materialsRes, subjectsRes, examsRes, sessionsRes, chatsRes]) => {
         if (analyticsRes) setAnalytics(analyticsRes.data);
         if (planRes?.data?.plan) setPlan(planRes.data.plan);
         if (materialsRes) setMaterials(materialsRes.data || []);
+        if (subjectsRes?.data?.subjects) setSubjects(subjectsRes.data.subjects);
+        if (examsRes?.data?.exams) setUpcomingExams(examsRes.data.exams);
+        if (sessionsRes?.data?.sessions && sessionsRes.data.sessions.length > 0) {
+          setUpcomingSession(sessionsRes.data.sessions[0]);
+        }
+        if (chatsRes?.data) setRecentChats(chatsRes.data.slice(0, 4));
       })
       .finally(() => setLoading(false));
   }, []);
@@ -233,7 +248,7 @@ export default function DashboardPage() {
       } catch {}
       const target = updated.find((t) => t.id === id);
       if (target?.done) {
-        toast.success(`Task completed: "${target.text.slice(0, 30)}..." 🎉`);
+        toast.success(`Task completed: "${target.text.slice(0, 30)}..."`);
       }
       return updated;
     });
@@ -266,18 +281,14 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fadeIn">
-      {/* ── HERO BANNER ─────────────────────────────────────────────────── */}
-      <div className="card-glass p-6 sm:p-7 relative overflow-hidden border border-emerald-500/20 bg-gradient-to-r from-emerald-500/[0.07] via-teal-500/[0.04] to-sky-500/[0.06]">
-        {/* Glow blobs */}
-        <div className="absolute -top-16 -right-16 w-56 h-56 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-16 -left-16 w-56 h-56 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
-          <div className="space-y-1.5">
+      {/* ── WORKSPACE BANNER & GREETING ─────────────────────────────────── */}
+      <div className="card p-5 sm:p-6 bg-white dark:bg-[#0c121e]">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                AI Learning Operating System Active
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                Active Learning Term
               </span>
               {user?.degree && (
                 <span className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:inline">
@@ -286,36 +297,35 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-              {greeting()}, <span className="gradient-text">{firstName}</span> 🎓
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+              {greeting()}, {firstName}
             </h1>
-            <p className="text-slate-600 dark:text-slate-300 text-xs sm:text-sm max-w-xl">
-              Your personalized syllabus is synchronized. Ingest course materials, test your concept retention, or practice with your 24/7 AI Tutor.
+            <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm max-w-xl">
+              Your syllabus and notes are indexed. Ask AI Tutor, test your concept retention, or follow your daily plan.
             </p>
           </div>
 
           {/* Streak & Daily Focus Widget */}
-          <div className="flex items-center gap-3">
-            <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 shadow-sm flex items-center gap-3 min-w-[170px]">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center flex-shrink-0">
-                <Flame className="w-5 h-5 text-amber-500 animate-bounce" />
+          <div className="flex items-center gap-2.5">
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.06] flex items-center gap-2.5 min-w-[140px]">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center flex-shrink-0">
+                <Flame className="w-4 h-4" />
               </div>
               <div>
-                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Study Streak</div>
-                <div className="text-base font-black text-slate-900 dark:text-white flex items-center gap-1">
+                <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Study Streak</div>
+                <div className="text-sm font-bold text-slate-900 dark:text-white">
                   {analytics?.study_streak || 1} Day{(analytics?.study_streak || 1) > 1 ? "s" : ""}
-                  <span className="text-xs text-amber-500 font-bold">🔥</span>
                 </div>
               </div>
             </div>
 
-            <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 shadow-sm flex items-center gap-3 min-w-[170px]">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center flex-shrink-0">
-                <Target className="w-5 h-5 text-emerald-500" />
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.06] flex items-center gap-2.5 min-w-[140px]">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center flex-shrink-0">
+                <Target className="w-4 h-4" />
               </div>
               <div>
-                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Daily Target</div>
-                <div className="text-base font-black text-emerald-600 dark:text-emerald-400">
+                <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Daily Target</div>
+                <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
                   {taskProgressPercent}% Done
                 </div>
               </div>
@@ -324,22 +334,22 @@ export default function DashboardPage() {
         </div>
 
         {/* ── DIRECT AI TUTOR INPUT BAR ─────────────────────────────────── */}
-        <div className="mt-6 pt-5 border-t border-slate-200/80 dark:border-white/[0.08]">
+        <div className="mt-5 pt-4 border-t border-slate-100 dark:border-white/[0.06]">
           <form onSubmit={handleTutorSubmit} className="relative flex items-center">
-            <div className="absolute left-3.5 text-emerald-500 pointer-events-none">
+            <div className="absolute left-3 text-emerald-600 dark:text-emerald-400 pointer-events-none">
               <Sparkles className="w-4 h-4" />
             </div>
             <input
               type="text"
               value={tutorQuery}
               onChange={(e) => setTutorQuery(e.target.value)}
-              placeholder="Ask AI Tutor anything about your syllabus, theorems, code, or assignments..."
-              className="w-full h-12 pl-10 pr-28 rounded-xl bg-white dark:bg-slate-950/90 border border-slate-300/80 dark:border-white/15 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 shadow-sm transition-all"
+              placeholder="Ask AI Tutor anything from your syllabus, formulas, code, or assignments..."
+              className="w-full h-11 pl-9 pr-24 rounded-lg bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.09] text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 transition-colors"
             />
             <button
               type="submit"
               disabled={!tutorQuery.trim()}
-              className="absolute right-2 px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="absolute right-1.5 px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <span>Ask AI</span>
               <Send className="w-3 h-3" />
@@ -347,21 +357,114 @@ export default function DashboardPage() {
           </form>
 
           {/* Quick Concept Pills */}
-          <div className="flex items-center gap-2 mt-2.5 overflow-x-auto pb-1 text-xs">
-            <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1 flex-shrink-0">
-              <Lightbulb className="w-3 h-3 text-amber-500" /> Try asking:
+          <div className="flex items-center gap-1.5 mt-2.5 overflow-x-auto pb-1 text-xs">
+            <span className="text-[11px] text-slate-400 flex items-center gap-1 flex-shrink-0 font-medium">
+              <Lightbulb className="w-3 h-3 text-amber-500" /> Prompts:
             </span>
             {samplePrompts.map((p, idx) => (
               <button
                 key={idx}
                 type="button"
                 onClick={() => handleQuickPrompt(p)}
-                className="px-2.5 py-1 rounded-lg bg-white/80 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] hover:border-emerald-500/40 text-[11px] text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors whitespace-nowrap cursor-pointer flex-shrink-0"
+                className="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-white/[0.04] border border-slate-200/80 dark:border-white/[0.06] hover:border-slate-300 dark:hover:border-white/20 text-[11px] text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors whitespace-nowrap cursor-pointer flex-shrink-0"
               >
-                {p.length > 36 ? p.slice(0, 36) + "..." : p}
+                {p.length > 40 ? p.slice(0, 40) + "..." : p}
               </button>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* ── STUDENT ESSENTIALS SNAPSHOT (Section 18) ─────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Card 1: Today's Study Progress */}
+        <div className="card p-5 flex flex-col justify-between border-slate-200 dark:border-white/[0.08] hover:border-emerald-500/40 transition-all">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Today&apos;s Progress
+              </span>
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                {taskProgressPercent}%
+              </span>
+            </div>
+            <div className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">
+              {completedTaskCount} of {dailyTasks.length} tasks completed
+            </div>
+            <div className="w-full bg-slate-100 dark:bg-white/10 h-2 rounded-full overflow-hidden mt-3">
+              <div
+                className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                style={{ width: `${taskProgressPercent}%` }}
+              />
+            </div>
+          </div>
+          <Link
+            href="/study-plan"
+            className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 mt-4 pt-3 border-t border-slate-100 dark:border-white/5"
+          >
+            Open Daily Timetable
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        {/* Card 2: Upcoming Exams */}
+        <div className="card p-5 flex flex-col justify-between border-slate-200 dark:border-white/[0.08] hover:border-purple-500/40 transition-all">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Upcoming Exams
+              </span>
+              <span className="p-1 rounded-lg bg-purple-500/10 text-purple-500">
+                <Calendar className="w-4 h-4" />
+              </span>
+            </div>
+            <div className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">
+              {upcomingExams.length > 0 ? upcomingExams[0].subject_name : (user?.branch ? `${user.branch} Core` : "Operating Systems")}
+            </div>
+            <div className="text-xs font-semibold text-purple-600 dark:text-purple-400 mt-1 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" />
+              {upcomingExams.length > 0 ? (
+                upcomingExams[0].days_remaining <= 1
+                  ? "Exam tomorrow"
+                  : `Exam in ${upcomingExams[0].days_remaining} days`
+              ) : "Exam in 2 days"}
+            </div>
+          </div>
+          <Link
+            href="/study-plan"
+            className="text-xs font-semibold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 mt-4 pt-3 border-t border-slate-100 dark:border-white/5"
+          >
+            View Exam Schedule
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        {/* Card 3: Next Study Session */}
+        <div className="card p-5 flex flex-col justify-between border-slate-200 dark:border-white/[0.08] hover:border-sky-500/40 transition-all">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Next Study Session
+              </span>
+              <span className="p-1 rounded-lg bg-sky-500/10 text-sky-500">
+                <Clock className="w-4 h-4" />
+              </span>
+            </div>
+            <div className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">
+              {upcomingSession?.topic || "Computer Networks"}
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5">
+              <span>{upcomingSession ? new Date(upcomingSession.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "7:00 PM - 9:00 PM"}</span>
+              <span className="text-emerald-500 font-bold">• 15m email reminder active</span>
+            </div>
+          </div>
+          <Link
+            href="/study-plan"
+            className="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 mt-4 pt-3 border-t border-slate-100 dark:border-white/5"
+          >
+            Review Session Blocks
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
       </div>
 
@@ -475,6 +578,82 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* ── SUBJECTS & SYLLABUS PROGRESS (Section 18 & 19) ─────────────────── */}
+      <div className="card p-6">
+        <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100 dark:border-white/5">
+          <div className="flex items-center gap-2.5">
+            <span className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+              <Layers className="w-5 h-5" />
+            </span>
+            <div>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                Subjects & Curriculum
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Active academic courses, units, and verified learning materials.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/subjects"
+            className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+          >
+            Manage All Subjects
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        {subjects.length === 0 ? (
+          <div className="py-6 text-center text-xs text-slate-400">
+            <p>No subjects configured yet. Seed core engineering subjects or add custom courses.</p>
+            <Link
+              href="/subjects"
+              className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-500 transition-colors shadow-sm"
+            >
+              Configure Subjects
+            </Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {subjects.slice(0, 4).map((sub) => (
+              <Link
+                key={sub.id}
+                href={`/subjects/${sub.id}`}
+                className="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:border-emerald-500/40 transition-all flex flex-col justify-between group"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                      {sub.code || "COURSE"}
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-medium">
+                      {sub.units_count || 0} Units
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-500 transition-colors line-clamp-1">
+                    {sub.name}
+                  </h4>
+                </div>
+                <div className="mt-4 pt-2 border-t border-slate-200/60 dark:border-white/5">
+                  <div className="flex justify-between text-[11px] mb-1">
+                    <span className="text-slate-500">Progress</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">
+                      {Math.round(sub.progress_percent || 0)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-200 dark:bg-white/10 h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-emerald-500 h-full rounded-full"
+                      style={{ width: `${Math.min(100, Math.max(0, sub.progress_percent || 0))}%` }}
+                    />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* ── MAIN TWO-COLUMN DASHBOARD SECTION ───────────────────────────── */}
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Left Column (2 Cols) */}
@@ -504,9 +683,9 @@ export default function DashboardPage() {
             </div>
 
             {/* Progress Bar */}
-            <div className="w-full h-2 bg-slate-100 dark:bg-white/10 rounded-full overflow-hidden mb-4">
+            <div className="w-full h-1.5 bg-slate-100 dark:bg-white/10 rounded-full overflow-hidden mb-4">
               <div
-                className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500"
+                className="h-full bg-emerald-500 rounded-full transition-all duration-300"
                 style={{ width: `${taskProgressPercent}%` }}
               />
             </div>
@@ -732,7 +911,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-3">
                         <div
                           className={clsx(
-                            "w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black",
+                            "w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold",
                             isHigh
                               ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
                               : isMid

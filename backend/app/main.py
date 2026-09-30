@@ -11,7 +11,11 @@ from fastapi.exceptions import RequestValidationError
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.routers import auth, materials, chat, quiz, study_plan, interview, analytics, search, profile
+from app.routers import (
+    auth, materials, chat, quiz, study_plan,
+    interview, analytics, search, profile,
+    subjects, notifications, reminders
+)
 
 # Configure logging
 logging.basicConfig(
@@ -90,6 +94,9 @@ app.include_router(interview.router)
 app.include_router(analytics.router)
 app.include_router(search.router)
 app.include_router(profile.router)
+app.include_router(subjects.router)
+app.include_router(notifications.router)
+app.include_router(reminders.router)
 
 
 # ─── HEALTH CHECK ─────────────────────────────────────────────────────────────

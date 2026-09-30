@@ -252,7 +252,7 @@ export default function InterviewPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
               <Mic className="w-5 h-5 text-purple-500" /> Interview Mode
             </h1>
             <p className="text-slate-500 dark:text-slate-400 text-sm">
@@ -478,7 +478,7 @@ export default function InterviewPage() {
     return (
       <div className="space-y-5 animate-fadeIn w-full">
         {/* Sticky Header with Exit Button & Badges */}
-        <div className="sticky top-0 z-30 bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-md pt-2 pb-3 border-b border-slate-200 dark:border-white/[0.08]">
+        <div className="sticky top-0 z-30 bg-white/95 dark:bg-[#0b0f19]/95 backdrop-blur-md pt-2 pb-3 border-b border-slate-200 dark:border-white/[0.08]">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -493,7 +493,7 @@ export default function InterviewPage() {
               <span className="badge badge-slate capitalize text-xs">
                 {currentQ?.difficulty || "medium"} difficulty
               </span>
-              <span className="text-xs px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold">
+              <span className="text-xs px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 font-semibold">
                 {mode === "project_viva" ? "Project Viva" : "Technical Round"}
               </span>
 
@@ -501,7 +501,7 @@ export default function InterviewPage() {
               <button
                 type="button"
                 onClick={() => setShowExitModal(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 hover:border-rose-500/50 text-xs font-bold transition-all shadow-sm"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/15 text-xs font-semibold transition-colors cursor-pointer"
                 title="Exit and conclude interview"
               >
                 <LogOut className="w-3.5 h-3.5" /> Exit & Conclude
@@ -511,8 +511,8 @@ export default function InterviewPage() {
 
           {/* Quick Question Stepper / Jump Bar */}
           <div className="flex items-center gap-1.5 overflow-x-auto pt-3 scrollbar-none">
-            <span className="text-xs font-semibold text-slate-400 mr-1.5 shrink-0 flex items-center gap-1">
-              <Clock className="w-3 h-3 text-purple-400" /> Questions:
+            <span className="text-xs font-medium text-slate-400 mr-1.5 shrink-0 flex items-center gap-1">
+              <Clock className="w-3 h-3 text-purple-500" /> Questions:
             </span>
             {questions.map((q, idx) => (
               <button
@@ -520,15 +520,15 @@ export default function InterviewPage() {
                 type="button"
                 onClick={() => navigateToQuestion(idx)}
                 className={clsx(
-                  "h-7 min-w-7 px-2 rounded-lg text-xs font-bold transition-all shrink-0 flex items-center justify-center gap-1 border",
+                  "h-7 min-w-7 px-2.5 rounded-lg text-xs font-semibold transition-all shrink-0 flex items-center justify-center gap-1 border cursor-pointer",
                   idx === currentIndex
-                    ? "bg-purple-600 text-white border-purple-400 shadow-md shadow-purple-600/30 ring-2 ring-purple-500/30 scale-105"
+                    ? "bg-purple-600 text-white border-purple-600 shadow-sm"
                     : q.isSubmitted
-                    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25"
-                    : "bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-white/10 hover:text-white"
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                    : "bg-slate-100 dark:bg-white/[0.04] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.15]"
                 )}
               >
-                {q.isSubmitted && <CheckCircle className="w-2.5 h-2.5 text-emerald-400" />}
+                {q.isSubmitted && <CheckCircle className="w-2.5 h-2.5 text-emerald-500" />}
                 Q{idx + 1}
               </button>
             ))}
@@ -540,23 +540,21 @@ export default function InterviewPage() {
           {/* Main Interview Q&A Section (2 cols) */}
           <div className="lg:col-span-2 space-y-4">
             {/* Question Card */}
-            <div className="card p-6 border border-slate-200 dark:border-white/10 shadow-sm">
+            <div className="card p-6 border border-slate-200 dark:border-white/[0.08] shadow-sm">
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-md shadow-purple-500/20">
-                    <Brain className="w-5 h-5 text-white" />
+                  <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0 text-purple-600 dark:text-purple-400">
+                    <Brain className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-purple-400">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">
                       Interviewer Question
                     </span>
-                    <span className="text-xs font-semibold text-slate-400 ml-2">
+                    <span className="text-xs font-medium text-slate-400 ml-2">
                       Q#{currentIndex + 1}
                     </span>
                   </div>
                 </div>
-
-                {/* Clean question header without redundant small arrows */}
               </div>
 
               <p className="text-slate-900 dark:text-white text-base sm:text-lg leading-relaxed font-semibold pt-1">
@@ -564,30 +562,30 @@ export default function InterviewPage() {
               </p>
             </div>
 
-            {/* ALWAYS SHOW ANSWER INPUT BOX BY DEFAULT (Screenshots 1 UI) */}
+            {/* ANSWER INPUT BOX */}
             {!currentQ?.feedback ? (
               <div className="space-y-4">
-                {/* Professional Impressive Technical Response Console */}
-                <div className="card p-0 border border-slate-700/80 dark:border-white/10 shadow-xl rounded-2xl overflow-hidden focus-within:border-purple-500/50 focus-within:ring-2 focus-within:ring-purple-500/20 transition-all duration-200">
+                {/* Technical Response Console */}
+                <div className="card p-0 border border-slate-200 dark:border-white/[0.08] shadow-sm rounded-xl overflow-hidden focus-within:border-purple-500 focus-within:ring-1 focus-within:ring-purple-500 transition-all duration-200">
                   {/* Console Header Bar */}
-                  <div className="flex flex-wrap items-center justify-between px-4 py-2.5 bg-slate-900/90 dark:bg-slate-950/90 border-b border-slate-800 text-xs gap-2">
+                  <div className="flex flex-wrap items-center justify-between px-4 py-2.5 bg-slate-50 dark:bg-white/[0.03] border-b border-slate-200 dark:border-white/[0.08] text-xs gap-2">
                     <div className="flex items-center gap-2.5 flex-wrap">
                       <div className="flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                        <span className="font-bold text-slate-200 flex items-center gap-1.5">
-                          <Terminal className="w-3.5 h-3.5 text-purple-400" /> Technical Response Console
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                        <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                          <Terminal className="w-3.5 h-3.5 text-purple-500" /> Technical Response Console
                         </span>
                       </div>
 
                       {/* Quick Helper Format Chips */}
-                      <div className="hidden sm:flex items-center gap-1.5 pl-3 border-l border-slate-800">
+                      <div className="hidden sm:flex items-center gap-1.5 pl-3 border-l border-slate-200 dark:border-white/[0.08]">
                         <button
                           type="button"
                           onClick={() => {
                             const snippet = "\n```python\n# Implementation logic\n\n```\n";
                             updateCurrentAnswer((currentQ?.userAnswer || "") + snippet);
                           }}
-                          className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800/80 hover:bg-purple-500/20 text-slate-400 hover:text-purple-300 border border-slate-700/60 transition-all"
+                          className="text-[11px] font-mono px-2 py-0.5 rounded bg-white dark:bg-white/[0.06] hover:bg-purple-500/10 text-slate-600 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-300 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer"
                           title="Insert code snippet template"
                         >
                           + Code
@@ -598,7 +596,7 @@ export default function InterviewPage() {
                             const complexity = "\nComplexity Analysis:\n• Time: O()\n• Space: O()\n";
                             updateCurrentAnswer((currentQ?.userAnswer || "") + complexity);
                           }}
-                          className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800/80 hover:bg-purple-500/20 text-slate-400 hover:text-purple-300 border border-slate-700/60 transition-all"
+                          className="text-[11px] font-mono px-2 py-0.5 rounded bg-white dark:bg-white/[0.06] hover:bg-purple-500/10 text-slate-600 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-300 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer"
                           title="Insert Time & Space complexity template"
                         >
                           + Complexity (O(n))
@@ -609,7 +607,7 @@ export default function InterviewPage() {
                             const steps = "\nKey Technical Steps:\n1. \n2. \n3. \n";
                             updateCurrentAnswer((currentQ?.userAnswer || "") + steps);
                           }}
-                          className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800/80 hover:bg-purple-500/20 text-slate-400 hover:text-purple-300 border border-slate-700/60 transition-all"
+                          className="text-[11px] font-mono px-2 py-0.5 rounded bg-white dark:bg-white/[0.06] hover:bg-purple-500/10 text-slate-600 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-300 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer"
                           title="Insert key points template"
                         >
                           + Points
@@ -623,13 +621,13 @@ export default function InterviewPage() {
                         <button
                           type="button"
                           onClick={() => updateCurrentAnswer("")}
-                          className="text-[11px] text-slate-500 hover:text-rose-400 transition-colors"
+                          className="text-[11px] text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
                         >
                           Clear
                         </button>
                       )}
-                      <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400 bg-slate-800/60 px-2.5 py-1 rounded-md border border-slate-700/50">
-                        <span className="text-purple-400 font-bold">
+                      <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-500 dark:text-slate-400 bg-white dark:bg-white/[0.04] px-2.5 py-1 rounded-md border border-slate-200 dark:border-white/[0.08]">
+                        <span className="text-purple-600 dark:text-purple-400 font-semibold">
                           {currentQ?.userAnswer.trim().split(/\s+/).filter(Boolean).length || 0}
                         </span>{" "}
                         words ·{" "}
@@ -638,7 +636,7 @@ export default function InterviewPage() {
                     </div>
                   </div>
 
-                  {/* Spacious Technical Textarea */}
+                  {/* Textarea */}
                   <div className="relative">
                     <textarea
                       value={currentQ?.userAnswer || ""}
@@ -651,19 +649,19 @@ export default function InterviewPage() {
                       }}
                       placeholder="Type your technical response here...&#10;&#10;• State the core concept, internal execution mechanism, and edge cases.&#10;• Mention Time & Space complexity (e.g. O(log n), O(n)).&#10;• Write code snippets or architectural patterns where relevant.&#10;&#10;Shortcut: Press Ctrl + Enter to submit for evaluation."
                       rows={12}
-                      className="w-full bg-slate-950/80 text-slate-100 p-5 text-sm sm:text-base font-mono leading-relaxed placeholder:text-slate-500/70 focus:outline-none resize-y min-h-[290px] selection:bg-purple-500/30"
+                      className="w-full bg-white dark:bg-[#080b12] text-slate-900 dark:text-slate-100 p-4 sm:p-5 text-sm font-mono leading-relaxed placeholder:text-slate-400 focus:outline-none resize-y min-h-[290px]"
                     />
                   </div>
 
                   {/* Console Bottom Status Footer */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-2 bg-slate-900/90 dark:bg-slate-950/90 border-t border-slate-800/80 text-[11px] text-slate-400">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-2 bg-slate-50 dark:bg-white/[0.03] border-t border-slate-200 dark:border-white/[0.08] text-[11px] text-slate-500 dark:text-slate-400">
                     <div className="flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                       <span>
                         <strong>Interviewer Expectation:</strong> 50–150 words with precise definitions & trade-offs.
                       </span>
                     </div>
-                    <div className="text-[10px] text-slate-500 font-mono hidden sm:inline-block">
+                    <div className="text-[10px] text-slate-400 font-mono hidden sm:inline-block">
                       Ctrl + Enter to Submit
                     </div>
                   </div>
@@ -788,7 +786,7 @@ export default function InterviewPage() {
                         key={label}
                         className={clsx("text-center p-3 rounded-xl border", bg)}
                       >
-                        <div className={clsx("text-2xl font-black", color)}>
+                        <div className={clsx("text-2xl font-bold tracking-tight", color)}>
                           {value !== undefined ? `${value.toFixed(0)}%` : "N/A"}
                         </div>
                         <div className="text-slate-400 text-xs mt-0.5 font-semibold">{label}</div>
@@ -887,8 +885,8 @@ export default function InterviewPage() {
 
               {avgScore !== null && (
                 <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-center">
-                  <div className="text-2xl font-black text-purple-400">{avgScore}%</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Average Answer Score</div>
+                  <div className="text-2xl font-bold tracking-tight text-purple-600 dark:text-purple-400">{avgScore}%</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Average Answer Score</div>
                 </div>
               )}
 
@@ -933,19 +931,19 @@ export default function InterviewPage() {
 
         {/* ── EXIT CONFIRMATION MODAL ────────────────────────────────────── */}
         {showExitModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fadeIn">
-            <div className="card p-6 max-w-md w-full border border-rose-500/30 shadow-2xl space-y-4 bg-slate-900 text-left">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+            <div className="card p-6 max-w-md w-full border border-slate-200 dark:border-white/10 shadow-2xl space-y-4 bg-white dark:bg-[#111827] text-left">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-500 flex items-center justify-center shrink-0">
                   <LogOut className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Exit Mock Interview?</h3>
-                  <p className="text-xs text-slate-400">Are you sure you want to exit this session?</p>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">Exit Mock Interview?</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Are you sure you want to exit this session?</p>
                 </div>
               </div>
 
-              <p className="text-xs text-slate-300 leading-relaxed bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/50">
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-white/[0.04] p-3.5 rounded-xl border border-slate-200 dark:border-white/[0.06]">
                 Your submitted answers and AI scores will remain in your interview history. You will be returned to the interview setup overview.
               </p>
 
@@ -953,14 +951,14 @@ export default function InterviewPage() {
                 <button
                   type="button"
                   onClick={() => setShowExitModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all"
+                  className="btn-secondary text-xs py-2 px-4"
                 >
                   Continue Interview
                 </button>
                 <button
                   type="button"
                   onClick={handleExitInterview}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-600/30 transition-all flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 shadow-sm transition-all flex items-center gap-1.5"
                 >
                   <LogOut className="w-3.5 h-3.5" /> Yes, Exit & Conclude
                 </button>
@@ -979,11 +977,11 @@ export default function InterviewPage() {
 
   return (
     <div className="w-full space-y-6 animate-fadeIn py-6">
-      <div className="card p-8 sm:p-12 text-center max-w-2xl mx-auto border border-purple-500/20 shadow-2xl">
-        <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-purple-500/30">
-          <Award className="w-10 h-10 text-white" />
+      <div className="card p-8 sm:p-12 text-center max-w-2xl mx-auto border border-purple-500/20 shadow-xl">
+        <div className="w-16 h-16 bg-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white shadow-sm ring-4 ring-purple-500/10">
+          <Award className="w-8 h-8 text-white" />
         </div>
-        <h2 className="text-3xl font-black text-slate-900 dark:text-white mb-2">
+        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white mb-2">
           Interview Complete!
         </h2>
         <p className="text-slate-500 dark:text-slate-400 text-sm max-w-md mx-auto mb-6">
@@ -993,11 +991,11 @@ export default function InterviewPage() {
         {/* Score Card */}
         <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto mb-8">
           <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10">
-            <div className="text-3xl font-black text-purple-400">{finalScore}%</div>
+            <div className="text-3xl font-bold tracking-tight text-purple-600 dark:text-purple-400">{finalScore}%</div>
             <div className="text-xs text-slate-400 font-semibold mt-1">Overall Mastery</div>
           </div>
           <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10">
-            <div className="text-3xl font-black text-emerald-400">{scoreHistory.length || questions.length}</div>
+            <div className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">{scoreHistory.length || questions.length}</div>
             <div className="text-xs text-slate-400 font-semibold mt-1">Questions Evaluated</div>
           </div>
         </div>

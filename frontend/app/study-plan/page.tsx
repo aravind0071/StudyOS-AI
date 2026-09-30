@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import DatePicker from "@/components/ui/DatePicker";
+import { studyPlanApi, remindersApi } from "@/lib/api";
 
 export interface ManualStudyBlock {
   id: string;
@@ -201,7 +202,7 @@ export default function StudyPlanPage() {
   const [formDurationInput, setFormDurationInput] = useState("90");
   const [formActivityType, setFormActivityType] = useState<ManualStudyBlock["activityType"]>("reading");
 
-  // Load state from localStorage on mount
+  // Load state from localStorage & backend on mount
   useEffect(() => {
     try {
       const savedBlocks = localStorage.getItem("studyos_manual_study_blocks_v3");
@@ -222,6 +223,40 @@ export default function StudyPlanPage() {
       const savedQuickLog = localStorage.getItem("studyos_quick_logged_minutes");
       if (savedQuickLog) setQuickLoggedMinutes(parseInt(savedQuickLog, 10));
     } catch (e) {}
+
+    // Synchronize from persistent database
+    studyPlanApi.getActive().then((res) => {
+      if (res.data?.plan?.tasks && res.data.plan.tasks.length > 0) {
+        const loadedTasks: ManualStudyBlock[] = res.data.plan.tasks.map((t: any, idx: number) => {
+          const startMins = 420 + (idx % 4) * 120;
+          const dur = t.duration_minutes || 60;
+          return {
+            id: String(t.id),
+            dayIndex: Math.max(0, (t.day || 1) - 1),
+            startTime: formatMinutesToTime(startMins),
+            endTime: formatMinutesToTime(startMins + dur),
+            durationMinutes: dur,
+            subject: t.topic?.includes("-") ? t.topic.split("-")[0].trim() : "Subject",
+            topic: t.topic,
+            actionTasks: t.reason || t.activity || "Curriculum topic study",
+            activityType: (t.activity?.toLowerCase().includes("quiz") ? "quiz" : t.activity?.toLowerCase().includes("rev") ? "revision" : t.activity?.toLowerCase().includes("prac") ? "practice" : "reading") as any,
+            isCompleted: Boolean(t.is_completed),
+          };
+        });
+        setBlocks(loadedTasks);
+        if (res.data.plan.exam_date) {
+          setExamDate(res.data.plan.exam_date.slice(0, 10));
+        }
+      }
+    }).catch(() => null);
+
+    remindersApi.getExams().then((res) => {
+      if (res.data?.exams && res.data.exams.length > 0) {
+        const firstExam = res.data.exams[0];
+        if (firstExam.subject_name) setExamSubject(firstExam.subject_name);
+        if (firstExam.exam_date) setExamDate(firstExam.exam_date.slice(0, 10));
+      }
+    }).catch(() => null);
   }, []);
 
   // Sync blocks to localStorage
@@ -240,6 +275,10 @@ export default function StudyPlanPage() {
     } catch (e) {}
 
     if (newDate) {
+      remindersApi.createExam({
+        subject_name: examSubject || "Final Exam",
+        exam_date: new Date(newDate).toISOString(),
+      }).catch(() => null);
       triggerExamReminderNotification(newDate, examSubject);
     }
   };
@@ -466,7 +505,14 @@ export default function StudyPlanPage() {
       : getDurationBetween(sTime, eTime);
 
     if (editingBlockId) {
-      // Update
+      // Update DB and local state
+      studyPlanApi.editTask(editingBlockId, {
+        topic: `${formSubject.trim() ? formSubject.trim() + " - " : ""}${formTopic.trim()}`,
+        activity: formActivityType,
+        duration_minutes: durationMinutes,
+        reason: formActionTasks.trim(),
+      }).catch(() => null);
+
       const updated = blocks.map((b) =>
         b.id === editingBlockId
           ? {
@@ -485,8 +531,9 @@ export default function StudyPlanPage() {
       toast.success("Study block updated!");
     } else {
       // Create new
+      const tempId = `block-${Date.now()}`;
       const newBlock: ManualStudyBlock = {
-        id: `block-${Date.now()}`,
+        id: tempId,
         dayIndex: activeDay,
         subject: formSubject.trim() || "Subject",
         topic: formTopic.trim(),
@@ -498,6 +545,31 @@ export default function StudyPlanPage() {
         isCompleted: false,
       };
       saveBlocks([...blocks, newBlock]);
+
+      studyPlanApi.addTask({
+        topic: `${formSubject.trim() ? formSubject.trim() + " - " : ""}${formTopic.trim()}`,
+        activity: formActivityType,
+        duration_minutes: durationMinutes,
+        day_number: activeDay + 1,
+        reason: formActionTasks.trim(),
+      }).then((res) => {
+        if (res.data?.task?.id) {
+          setBlocks((prev) => prev.map((b) => b.id === tempId ? { ...b, id: String(res.data.task.id) } : b));
+        }
+      }).catch(() => null);
+
+      // Register session for 15-minute reminders
+      try {
+        const now = new Date();
+        const startDt = new Date(now.getTime() + (activeDay * 86400000));
+        const endDt = new Date(startDt.getTime() + (durationMinutes * 60000));
+        remindersApi.createSession({
+          topic: `${formSubject ? formSubject + ": " : ""}${formTopic}`,
+          start_time: startDt.toISOString(),
+          end_time: endDt.toISOString(),
+        }).catch(() => null);
+      } catch {}
+
       toast.success("New study block scheduled for this day!");
     }
 
@@ -506,16 +578,20 @@ export default function StudyPlanPage() {
 
   // Toggle complete state of a block
   const toggleBlockCompleted = (blockId: string) => {
+    const target = blocks.find((b) => b.id === blockId);
+    const nextCompleted = target ? !target.isCompleted : true;
     const updated = blocks.map((b) =>
-      b.id === blockId ? { ...b, isCompleted: !b.isCompleted } : b
+      b.id === blockId ? { ...b, isCompleted: nextCompleted } : b
     );
     saveBlocks(updated);
+    studyPlanApi.updateTask(blockId, nextCompleted).catch(() => null);
   };
 
   // Delete a block
   const deleteBlock = (blockId: string) => {
     const updated = blocks.filter((b) => b.id !== blockId);
     saveBlocks(updated);
+    studyPlanApi.deleteTask(blockId).catch(() => null);
     toast.success("Study block removed from timetable.");
   };
 
@@ -635,7 +711,7 @@ export default function StudyPlanPage() {
       {/* ── TOP HEADER ──────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2.5">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
             <Calendar className="w-6 h-6 text-emerald-500" /> Manual Study Timetable & Daily Schedule
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">
@@ -672,31 +748,29 @@ export default function StudyPlanPage() {
       </div>
 
       {/* ── EXAM DEADLINE & DAY-TO-DAY NOTIFICATION REMINDER CARD ─────────── */}
-      <div className="card p-5 sm:p-6 border border-slate-700/80 dark:border-white/10 bg-gradient-to-br from-slate-900 via-slate-900/95 to-slate-950 shadow-xl relative z-30">
-        <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-60 h-60 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-
+      <div className="card p-5 sm:p-6 border border-slate-200 dark:border-white/[0.08] relative z-30">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
           {/* Left: Exam Inputs */}
-          <div className="space-y-3 flex-1">
+          <div className="space-y-3.5 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+              <span className="text-xs font-semibold uppercase tracking-wider px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
                 <Target className="w-3.5 h-3.5" /> Target Exam Deadline
               </span>
               {daysLeft !== null && (
                 <span className={clsx(
-                  "text-xs font-bold px-2.5 py-0.5 rounded-full border",
+                  "text-xs font-semibold px-2.5 py-1 rounded-md border",
                   daysLeft <= 0
-                    ? "bg-rose-500/20 text-rose-400 border-rose-500/30"
+                    ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
                     : daysLeft <= 3
-                    ? "bg-rose-500/15 text-rose-300 border-rose-500/30"
+                    ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
                     : daysLeft <= 7
-                    ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
-                    : "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+                    : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
                 )}>
                   {daysLeft <= 0
                     ? "Exam is Today!"
                     : daysLeft === 1
-                    ? "1 Day Remaining!"
+                    ? "1 Day Remaining"
                     : `${daysLeft} Days Remaining`}
                 </span>
               )}
@@ -704,8 +778,8 @@ export default function StudyPlanPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl items-start">
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1.5 flex items-center gap-1.5">
-                  <BookOpen className="w-3.5 h-3.5 text-sky-400" /> Target Subject / Course
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-sky-500" /> Target Subject / Course
                 </label>
                 <div className="relative flex items-center">
                   <BookOpen className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" />
@@ -715,14 +789,14 @@ export default function StudyPlanPage() {
                     onChange={(e) => handleExamSubjectChange(e.target.value)}
                     placeholder="e.g. Operating Systems, Python"
                     style={{ paddingLeft: "2.4rem" }}
-                    className="w-full h-[42px] rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 text-xs sm:text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 pr-3 transition-all outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 shadow-sm"
+                    className="w-full h-10 rounded-lg bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 pr-3 transition-colors outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-200 mb-1.5 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-emerald-400" /> Exam Date
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-emerald-500" /> Exam Date
                 </label>
                 <DatePicker
                   id="target_exam_deadline_picker"
@@ -735,10 +809,10 @@ export default function StudyPlanPage() {
               </div>
             </div>
 
-            {/* Quick 1-Click Presets row spanning cleanly underneath both columns */}
+            {/* Quick 1-Click Presets row */}
             <div className="flex items-center gap-1.5 flex-wrap pt-0.5 max-w-xl">
-              <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-purple-400" /> Quick Exam Presets:
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-purple-500" /> Presets:
               </span>
               {[
                 { label: "+3 Days", days: 3 },
@@ -752,7 +826,7 @@ export default function StudyPlanPage() {
                   key={p.label}
                   type="button"
                   onClick={() => applyExamPresetDays(p.days)}
-                  className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-800/90 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border border-slate-700/80 transition-all cursor-pointer"
+                  className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 dark:bg-white/[0.05] hover:bg-emerald-500/10 text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer"
                 >
                   {p.label}
                 </button>
@@ -761,42 +835,42 @@ export default function StudyPlanPage() {
           </div>
 
           {/* Right: Day-to-Day Notification Reminders Toggle & Test */}
-          <div className="bg-slate-800/80 backdrop-blur border border-slate-700/60 p-4 rounded-xl shrink-0 flex flex-col justify-between sm:w-80">
+          <div className="bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/[0.08] p-4 rounded-xl shrink-0 flex flex-col justify-between sm:w-80">
             <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5 font-bold text-xs text-white">
-                <BellRing className="w-4 h-4 text-amber-400" /> Day-to-Day Reminders
+              <div className="flex items-center gap-1.5 font-semibold text-xs text-slate-900 dark:text-white">
+                <BellRing className="w-4 h-4 text-amber-500" /> Daily Reminders
               </div>
               <button
                 type="button"
                 onClick={toggleDailyReminders}
                 className={clsx(
-                  "text-[11px] font-bold px-2 py-0.5 rounded-full border transition-all",
+                  "text-[11px] font-semibold px-2 py-0.5 rounded-md border transition-colors",
                   dailyRemindersEnabled
-                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                    : "bg-slate-700 text-slate-400 border-slate-600"
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                    : "bg-slate-200 dark:bg-white/[0.06] text-slate-500 dark:text-slate-400 border-slate-300 dark:border-white/[0.08]"
                 )}
               >
                 {dailyRemindersEnabled ? "Active" : "Muted"}
               </button>
             </div>
 
-            <p className="text-[11px] text-slate-300 leading-relaxed mb-3">
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-3">
               Sends daily morning countdown & timetable reminders to your top notification bell.
             </p>
 
             <button
               type="button"
               onClick={() => triggerExamReminderNotification(examDate, examSubject)}
-              className="text-xs font-semibold py-1.5 px-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 transition-all flex items-center justify-center gap-1.5"
+              className="text-xs font-semibold py-1.5 px-3 rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15 transition-colors flex items-center justify-center gap-1.5"
             >
-              <Bell className="w-3.5 h-3.5" /> Send Reminder Notification Now
+              <Bell className="w-3.5 h-3.5" /> Send Test Notification
             </button>
           </div>
         </div>
       </div>
 
       {/* ── DAY SELECTOR TABS ───────────────────────────────────────────── */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none border-b border-slate-200 dark:border-white/10">
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none border-b border-slate-200 dark:border-white/[0.08]">
         {days.map((d) => {
           const count = blocks.filter((b) => b.dayIndex === d.dayIndex).length;
           const isActive = activeDay === d.dayIndex;
@@ -806,18 +880,18 @@ export default function StudyPlanPage() {
               type="button"
               onClick={() => setActiveDay(d.dayIndex)}
               className={clsx(
-                "px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 border",
+                "px-3.5 py-2 rounded-lg text-xs font-medium transition-all shrink-0 flex items-center gap-2 border",
                 isActive
-                  ? "bg-emerald-500 text-white border-emerald-400 shadow-md shadow-emerald-500/25 scale-105"
-                  : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:border-emerald-500/40"
+                  ? "bg-emerald-500 text-white border-emerald-500 shadow-sm"
+                  : "bg-transparent text-slate-600 dark:text-slate-400 border-transparent hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.04]"
               )}
             >
               <span>{d.label}</span>
               <span className={clsx(
-                "text-[10px] px-1.5 py-0.2 rounded-full font-bold",
-                isActive ? "bg-white/20 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-400"
+                "text-[10px] px-1.5 py-0.5 rounded-full font-semibold",
+                isActive ? "bg-white/20 text-white" : "bg-slate-100 dark:bg-white/[0.06] text-slate-500 dark:text-slate-400"
               )}>
-                {count} blocks
+                {count}
               </span>
             </button>
           );
@@ -830,7 +904,7 @@ export default function StudyPlanPage() {
           <div className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold mb-1">
             <Clock className="w-3.5 h-3.5 text-sky-400" /> Planned Hours
           </div>
-          <div className="text-2xl font-black text-slate-900 dark:text-white">
+          <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             {totalPlannedHours} <span className="text-xs text-slate-400 font-normal">hrs</span>
           </div>
           <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
@@ -842,7 +916,7 @@ export default function StudyPlanPage() {
           <div className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold mb-1">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Completed
           </div>
-          <div className="text-2xl font-black text-emerald-500">
+          <div className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
             {totalDoneHours} <span className="text-xs text-slate-400 font-normal">hrs</span>
           </div>
           <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
@@ -854,12 +928,12 @@ export default function StudyPlanPage() {
           <div className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold mb-1">
             <Flame className="w-3.5 h-3.5 text-amber-400" /> Completion Rate
           </div>
-          <div className="text-2xl font-black text-slate-900 dark:text-white">
+          <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             {dayProgressPercent}%
           </div>
           <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1.5">
             <div
-              className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full"
+              className="h-full bg-emerald-500 rounded-full"
               style={{ width: `${dayProgressPercent}%` }}
             />
           </div>
@@ -965,11 +1039,11 @@ export default function StudyPlanPage() {
                     <div className="space-y-1 min-w-0 flex-1">
                       {/* Top Meta Line: Time Range & Badges */}
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-xs font-bold text-purple-400 bg-purple-500/10 px-2.5 py-0.5 rounded-md border border-purple-500/20 flex items-center gap-1">
-                          <Clock className="w-3 h-3" /> {block.startTime} – {block.endTime}
+                        <span className="font-mono text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-white/[0.06] px-2.5 py-0.5 rounded-md border border-slate-200 dark:border-white/[0.08] flex items-center gap-1.5">
+                          <Clock className="w-3 h-3 text-slate-400" /> {block.startTime} – {block.endTime}
                         </span>
 
-                        <span className="text-xs text-slate-400 font-semibold">
+                        <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                           ({block.durationMinutes} min · {(block.durationMinutes / 60).toFixed(1)} hrs)
                         </span>
 
@@ -977,14 +1051,14 @@ export default function StudyPlanPage() {
                           {badge.label}
                         </span>
 
-                        <span className="text-[11px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                        <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/[0.06] px-2 py-0.5 rounded-md border border-slate-200 dark:border-white/[0.08]">
                           {block.subject}
                         </span>
                       </div>
 
                       {/* Main Title / Topic */}
                       <h3 className={clsx(
-                        "text-base font-bold pt-1",
+                        "text-base font-semibold pt-1",
                         block.isCompleted ? "line-through text-slate-400 dark:text-slate-500" : "text-slate-900 dark:text-white"
                       )}>
                         {block.topic}
@@ -993,15 +1067,15 @@ export default function StudyPlanPage() {
                       {/* What to do / Action checklist */}
                       {block.actionTasks && (
                         <div className="pt-1.5 space-y-1">
-                          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                             Action Plan & Tasks:
                           </div>
                           <div className="grid grid-cols-1 gap-1">
                             {block.actionTasks.split("\n").filter(Boolean).map((taskLine, tIdx) => {
                               const cleaned = taskLine.replace(/^[•\-\*]\s*/, "");
                               return (
-                                <div key={tIdx} className="flex items-start gap-2 text-xs text-slate-300">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                                <div key={tIdx} className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
                                   <span className="leading-relaxed">{cleaned}</span>
                                 </div>
                               );
@@ -1017,7 +1091,7 @@ export default function StudyPlanPage() {
                     <button
                       type="button"
                       onClick={() => openEditBlockModal(block)}
-                      className="p-1.5 rounded-lg border border-slate-200 dark:border-white/10 hover:border-purple-500/50 hover:bg-purple-500/10 text-slate-400 hover:text-purple-300 transition-all"
+                      className="p-1.5 rounded-lg border border-slate-200 dark:border-white/[0.08] hover:bg-slate-100 dark:hover:bg-white/[0.06] text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
                       title="Edit this study block"
                     >
                       <Pencil className="w-3.5 h-3.5" />
@@ -1025,7 +1099,7 @@ export default function StudyPlanPage() {
                     <button
                       type="button"
                       onClick={() => deleteBlock(block.id)}
-                      className="p-1.5 rounded-lg border border-slate-200 dark:border-white/10 hover:border-rose-500/50 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 transition-all"
+                      className="p-1.5 rounded-lg border border-slate-200 dark:border-white/[0.08] hover:border-rose-500/20 hover:bg-rose-500/10 text-slate-400 hover:text-rose-500 transition-colors"
                       title="Delete this study block"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -1038,27 +1112,27 @@ export default function StudyPlanPage() {
         )}
       </div>
 
-      {/* ── MODAL: SCHEDULE / EDIT TIME BLOCK (FIT TO SCREEN 2-COLUMN) ───── */}
+      {/* ── MODAL: SCHEDULE / EDIT TIME BLOCK ───── */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-2 sm:p-4 overflow-hidden animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 overflow-hidden animate-fadeIn">
           <form
             onSubmit={handleSaveBlock}
-            className="w-full max-w-4xl max-h-[88vh] flex flex-col rounded-2xl border border-slate-700/80 shadow-2xl bg-gradient-to-b from-slate-900 via-slate-900/98 to-slate-950 text-left overflow-hidden animate-scaleUp"
+            className="w-full max-w-4xl max-h-[88vh] flex flex-col rounded-2xl border border-slate-200 dark:border-white/[0.08] shadow-2xl bg-white dark:bg-[#12161f] text-left overflow-hidden"
           >
             {/* FIXED MODAL HEADER */}
-            <div className="flex items-center justify-between border-b border-slate-800 p-3.5 sm:px-6 shrink-0 bg-slate-900/95">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/[0.08] p-4 sm:px-6 shrink-0 bg-slate-50/60 dark:bg-white/[0.02]">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                  <Clock className="w-4 h-4 sm:w-5 sm:h-5" />
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <Clock className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                 </div>
                 <div>
-                  <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                  <h3 className="text-sm sm:text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                     {editingBlockId ? "Edit Study Time Block" : "Schedule New Study Block"}
-                    <span className="text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/[0.08]">
                       {days.find((d) => d.dayIndex === activeDay)?.label}
                     </span>
                   </h3>
-                  <p className="text-[11px] text-slate-400 hidden sm:block">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
                     Configure focused topics, synchronized study hours, and specific execution checklist.
                   </p>
                 </div>
@@ -1066,56 +1140,56 @@ export default function StudyPlanPage() {
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors text-sm cursor-pointer"
+                className="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-white/[0.06] text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center transition-colors text-sm cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            {/* SCROLLABLE 2-COLUMN BODY THAT FITS THE VIEWPORT */}
-            <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 scrollbar-thin">
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                {/* ── LEFT COLUMN: Topic & Action Plan (7 cols on md+) ── */}
-                <div className="md:col-span-7 space-y-3">
+            {/* SCROLLABLE 2-COLUMN BODY */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-white dark:bg-[#12161f]">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+                {/* ── LEFT COLUMN: Topic & Action Plan ── */}
+                <div className="md:col-span-7 space-y-3.5">
                   {/* Subject & Activity Mode */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-200 mb-1 flex items-center gap-1.5">
-                        <BookOpen className="w-3.5 h-3.5 text-sky-400" /> Subject / Course
+                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                        <BookOpen className="w-3.5 h-3.5 text-sky-500" /> Subject / Course
                       </label>
                       <input
                         type="text"
                         value={formSubject}
                         onChange={(e) => setFormSubject(e.target.value)}
                         placeholder="e.g. Operating Systems, DBMS"
-                        className="input-field text-xs sm:text-sm py-1.5 bg-slate-900/90"
+                        className="input-field text-xs sm:text-sm py-2 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08]"
                         required
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-200 mb-1 flex items-center gap-1.5">
-                        <Layers className="w-3.5 h-3.5 text-amber-400" /> Activity Focus
+                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-amber-500" /> Activity Focus
                       </label>
                       <select
                         value={formActivityType}
                         onChange={(e) => setFormActivityType(e.target.value as any)}
-                        className="input-field text-xs sm:text-sm py-1.5 bg-slate-900/90 text-slate-200"
+                        className="input-field text-xs sm:text-sm py-2 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] text-slate-900 dark:text-white"
                       >
-                        <option value="reading">📖 Concept Reading & Theory</option>
-                        <option value="practice">⚡ Problem Solving & Coding</option>
-                        <option value="revision">🧠 Active Recall & Flashcards</option>
-                        <option value="quiz">📝 Diagnostic Quiz & PYQs</option>
-                        <option value="break">☕ Rest & Cognitive Break</option>
+                        <option value="reading">Concept Reading & Theory</option>
+                        <option value="practice">Problem Solving & Coding</option>
+                        <option value="revision">Active Recall & Flashcards</option>
+                        <option value="quiz">Diagnostic Quiz & PYQs</option>
+                        <option value="break">Rest & Cognitive Break</option>
                       </select>
                     </div>
                   </div>
 
                   {/* Topic / Chapter */}
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[11px] font-semibold text-slate-200 flex items-center gap-1.5">
-                        <Target className="w-3.5 h-3.5 text-emerald-400" />
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <Target className="w-3.5 h-3.5 text-emerald-500" />
                         What to Study (Topic / Chapter) <span className="text-rose-500">*</span>
                       </label>
                       <span className="text-[10px] text-slate-400">Quick tags:</span>
@@ -1125,10 +1199,10 @@ export default function StudyPlanPage() {
                       value={formTopic}
                       onChange={(e) => setFormTopic(e.target.value)}
                       placeholder="e.g. Demand Paging, Inverted Page Tables & TLB Hit Ratio"
-                      className="input-field text-xs sm:text-sm py-1.5 bg-slate-900/90 font-medium"
+                      className="input-field text-xs sm:text-sm py-2 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08]"
                       required
                     />
-                    <div className="flex items-center gap-1 flex-wrap mt-1">
+                    <div className="flex items-center gap-1 flex-wrap mt-1.5">
                       {[
                         "[Deep Dive]",
                         "[Numericals]",
@@ -1140,7 +1214,7 @@ export default function StudyPlanPage() {
                           key={tag}
                           type="button"
                           onClick={() => prependTopicTag(tag)}
-                          className="text-[9px] sm:text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-800/90 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border border-slate-700/60 transition-all cursor-pointer"
+                          className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 dark:bg-white/[0.05] hover:bg-emerald-500/10 text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer"
                         >
                           + {tag}
                         </button>
@@ -1149,97 +1223,95 @@ export default function StudyPlanPage() {
                   </div>
 
                   {/* Specific Tasks / Action Plan container */}
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <div className="flex items-center justify-between flex-wrap gap-1">
-                      <label className="block text-[11px] font-semibold text-slate-200 flex items-center gap-1.5">
-                        <ListTodo className="w-3.5 h-3.5 text-emerald-400" />
+                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <ListTodo className="w-3.5 h-3.5 text-emerald-500" />
                         Specific Tasks / Action Plan
                       </label>
-                      <div className="text-[10px] text-slate-400 font-mono">
-                        {formActionTasks ? `${formActionTasks.split("\n").filter(Boolean).length} tasks defined` : "Checklist"}
+                      <div className="text-[11px] text-slate-400 font-mono">
+                        {formActionTasks ? `${formActionTasks.split("\n").filter(Boolean).length} tasks` : "Optional"}
                       </div>
                     </div>
 
                     {/* Action Toolbar */}
-                    <div className="flex items-center gap-1 flex-wrap bg-slate-800/70 p-1 rounded-lg border border-slate-700/60">
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 px-1">Insert:</span>
+                    <div className="flex items-center gap-1 flex-wrap bg-slate-50 dark:bg-white/[0.03] p-1.5 rounded-lg border border-slate-200 dark:border-white/[0.08]">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1">Insert:</span>
                       <button
                         type="button"
                         onClick={addBulletItem}
-                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-700/90 hover:bg-emerald-500/20 text-slate-200 hover:text-emerald-300 transition-all cursor-pointer"
+                        className="text-[11px] font-medium px-2 py-0.5 rounded bg-white dark:bg-white/[0.06] hover:bg-emerald-500/10 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer"
                       >
                         + Bullet (•)
                       </button>
                       <button
                         type="button"
                         onClick={() => appendActionTask("• Read lecture slides 1-45 & annotate definitions")}
-                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-700/90 hover:bg-sky-500/20 text-slate-200 hover:text-sky-300 transition-all flex items-center gap-1 cursor-pointer"
+                        className="text-[11px] font-medium px-2 py-0.5 rounded bg-white dark:bg-white/[0.06] hover:bg-sky-500/10 text-slate-700 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-400 border border-slate-200 dark:border-white/[0.08] transition-colors flex items-center gap-1 cursor-pointer"
                       >
-                        📖 Read Notes
+                        + Notes
                       </button>
                       <button
                         type="button"
                         onClick={() => appendActionTask("• Solve 5 past-year numerical questions with steps")}
-                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-700/90 hover:bg-amber-500/20 text-slate-200 hover:text-amber-300 transition-all flex items-center gap-1 cursor-pointer"
+                        className="text-[11px] font-medium px-2 py-0.5 rounded bg-white dark:bg-white/[0.06] hover:bg-amber-500/10 text-slate-700 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-400 border border-slate-200 dark:border-white/[0.08] transition-colors flex items-center gap-1 cursor-pointer"
                       >
-                        ⚡ Numericals
+                        + Numericals
                       </button>
                       <button
                         type="button"
                         onClick={() => appendActionTask("• Active recall & self-test formula sheet from memory")}
-                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-700/90 hover:bg-emerald-500/20 text-slate-200 hover:text-emerald-300 transition-all flex items-center gap-1 cursor-pointer"
+                        className="text-[11px] font-medium px-2 py-0.5 rounded bg-white dark:bg-white/[0.06] hover:bg-emerald-500/10 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 border border-slate-200 dark:border-white/[0.08] transition-colors flex items-center gap-1 cursor-pointer"
                       >
-                        🧠 Formulas
+                        + Formulas
                       </button>
                       <button
                         type="button"
                         onClick={() => setFormActionTasks("")}
-                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-700/90 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 transition-all ml-auto cursor-pointer"
+                        className="text-[11px] font-medium px-2 py-0.5 rounded hover:bg-rose-500/10 text-slate-400 hover:text-rose-500 transition-colors ml-auto cursor-pointer"
                       >
                         Clear
                       </button>
                     </div>
 
-                    {/* Textarea with balanced height */}
-                    <div className="relative">
-                      <textarea
-                        value={formActionTasks}
-                        onChange={(e) => setFormActionTasks(e.target.value)}
-                        placeholder={`• Read textbook Chapter 8 on Virtual Memory & TLB architecture\n• Solve 5 numerical problems comparing FIFO vs LRU page faults\n• Write down 1-page formula cheatsheet and self-test\n• Review weak quiz questions from yesterday`}
-                        rows={5}
-                        className="w-full rounded-xl bg-slate-950/90 border border-slate-700/80 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-slate-100 placeholder:text-slate-500 text-xs font-mono leading-relaxed p-2.5 resize-none transition-all shadow-inner"
-                      />
-                    </div>
+                    {/* Textarea */}
+                    <textarea
+                      value={formActionTasks}
+                      onChange={(e) => setFormActionTasks(e.target.value)}
+                      placeholder={`• Read textbook Chapter 8 on Virtual Memory & TLB architecture\n• Solve 5 numerical problems comparing FIFO vs LRU page faults\n• Write down 1-page formula cheatsheet and self-test`}
+                      rows={4}
+                      className="w-full rounded-xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-slate-900 dark:text-white placeholder:text-slate-400 text-xs font-mono leading-relaxed p-3 resize-none transition-all outline-none"
+                    />
                   </div>
                 </div>
 
-                {/* ── RIGHT COLUMN: Time Scheduling & Duration Console (5 cols on md+) ── */}
-                <div className="md:col-span-5 space-y-2.5">
-                  <div className="bg-slate-950/70 p-3 sm:p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+                {/* ── RIGHT COLUMN: Time Scheduling & Duration Console ── */}
+                <div className="md:col-span-5 space-y-3">
+                  <div className="bg-slate-50/60 dark:bg-white/[0.02] p-4 rounded-xl border border-slate-200 dark:border-white/[0.08] space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-purple-400" /> Time & Duration
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" /> Time & Duration
                       </span>
-                      <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      <span className="text-xs font-mono font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
                         {formatDurationText(parseInt(formDurationInput, 10) || 0)}
                       </span>
                     </div>
 
                     {/* Start Time */}
-                    <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-700/60">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[11px] font-semibold text-slate-300">Start Time</span>
-                        <span className="font-mono text-emerald-400 font-bold text-xs">
+                    <div className="bg-white dark:bg-white/[0.04] p-3 rounded-lg border border-slate-200 dark:border-white/[0.08]">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Start Time</span>
+                        <span className="font-mono text-emerald-600 dark:text-emerald-400 font-semibold text-xs">
                           {startHour}:{startMinute} {startPeriod}
                         </span>
                       </div>
-                      <div className="grid grid-cols-3 gap-1">
+                      <div className="grid grid-cols-3 gap-1.5">
                         <div>
-                          <span className="block text-[8px] text-slate-400 uppercase font-semibold mb-0.5 text-center">Hour</span>
+                          <span className="block text-[9px] text-slate-400 uppercase font-medium mb-0.5 text-center">Hour</span>
                           <select
                             value={startHour}
                             onChange={(e) => handleStartHourChange(e.target.value)}
-                            className="w-full bg-slate-800 text-white text-xs font-semibold py-1 px-1 rounded border border-slate-700 text-center cursor-pointer"
+                            className="w-full bg-slate-50 dark:bg-white/[0.06] text-slate-900 dark:text-white text-xs font-medium py-1 px-1 rounded border border-slate-200 dark:border-white/[0.08] text-center cursor-pointer"
                           >
                             {["01","02","03","04","05","06","07","08","09","10","11","12"].map(h => (
                               <option key={h} value={h}>{h}</option>
@@ -1247,11 +1319,11 @@ export default function StudyPlanPage() {
                           </select>
                         </div>
                         <div>
-                          <span className="block text-[8px] text-slate-400 uppercase font-semibold mb-0.5 text-center">Min</span>
+                          <span className="block text-[9px] text-slate-400 uppercase font-medium mb-0.5 text-center">Min</span>
                           <select
                             value={startMinute}
                             onChange={(e) => handleStartMinuteChange(e.target.value)}
-                            className="w-full bg-slate-800 text-white text-xs font-semibold py-1 px-1 rounded border border-slate-700 text-center cursor-pointer"
+                            className="w-full bg-slate-50 dark:bg-white/[0.06] text-slate-900 dark:text-white text-xs font-medium py-1 px-1 rounded border border-slate-200 dark:border-white/[0.08] text-center cursor-pointer"
                           >
                             {["00","05","10","15","20","25","30","35","40","45","50","55"].map(m => (
                               <option key={m} value={m}>:{m}</option>
@@ -1259,14 +1331,14 @@ export default function StudyPlanPage() {
                           </select>
                         </div>
                         <div>
-                          <span className="block text-[8px] text-slate-400 uppercase font-semibold mb-0.5 text-center">AM/PM</span>
-                          <div className="flex rounded overflow-hidden border border-slate-700 bg-slate-800 h-[26px] p-0.5">
+                          <span className="block text-[9px] text-slate-400 uppercase font-medium mb-0.5 text-center">AM/PM</span>
+                          <div className="flex rounded border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-white/[0.06] h-[28px] p-0.5">
                             <button
                               type="button"
                               onClick={() => handleStartPeriodToggle("AM")}
                               className={clsx(
-                                "flex-1 text-[9px] font-bold rounded transition-all cursor-pointer flex items-center justify-center",
-                                startPeriod === "AM" ? "bg-emerald-500 text-white shadow" : "text-slate-400 hover:text-white"
+                                "flex-1 text-[10px] font-semibold rounded transition-colors flex items-center justify-center cursor-pointer",
+                                startPeriod === "AM" ? "bg-emerald-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                               )}
                             >
                               AM
@@ -1275,8 +1347,8 @@ export default function StudyPlanPage() {
                               type="button"
                               onClick={() => handleStartPeriodToggle("PM")}
                               className={clsx(
-                                "flex-1 text-[9px] font-bold rounded transition-all cursor-pointer flex items-center justify-center",
-                                startPeriod === "PM" ? "bg-emerald-500 text-white shadow" : "text-slate-400 hover:text-white"
+                                "flex-1 text-[10px] font-semibold rounded transition-colors flex items-center justify-center cursor-pointer",
+                                startPeriod === "PM" ? "bg-emerald-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                               )}
                             >
                               PM
@@ -1287,20 +1359,20 @@ export default function StudyPlanPage() {
                     </div>
 
                     {/* End Time */}
-                    <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-700/60">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[11px] font-semibold text-slate-300">End Time</span>
-                        <span className="font-mono text-purple-400 font-bold text-xs">
+                    <div className="bg-white dark:bg-white/[0.04] p-3 rounded-lg border border-slate-200 dark:border-white/[0.08]">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">End Time</span>
+                        <span className="font-mono text-purple-600 dark:text-purple-400 font-semibold text-xs">
                           {endHour}:{endMinute} {endPeriod}
                         </span>
                       </div>
-                      <div className="grid grid-cols-3 gap-1">
+                      <div className="grid grid-cols-3 gap-1.5">
                         <div>
-                          <span className="block text-[8px] text-slate-400 uppercase font-semibold mb-0.5 text-center">Hour</span>
+                          <span className="block text-[9px] text-slate-400 uppercase font-medium mb-0.5 text-center">Hour</span>
                           <select
                             value={endHour}
                             onChange={(e) => handleEndHourChange(e.target.value)}
-                            className="w-full bg-slate-800 text-white text-xs font-semibold py-1 px-1 rounded border border-slate-700 text-center cursor-pointer"
+                            className="w-full bg-slate-50 dark:bg-white/[0.06] text-slate-900 dark:text-white text-xs font-medium py-1 px-1 rounded border border-slate-200 dark:border-white/[0.08] text-center cursor-pointer"
                           >
                             {["01","02","03","04","05","06","07","08","09","10","11","12"].map(h => (
                               <option key={h} value={h}>{h}</option>
@@ -1308,11 +1380,11 @@ export default function StudyPlanPage() {
                           </select>
                         </div>
                         <div>
-                          <span className="block text-[8px] text-slate-400 uppercase font-semibold mb-0.5 text-center">Min</span>
+                          <span className="block text-[9px] text-slate-400 uppercase font-medium mb-0.5 text-center">Min</span>
                           <select
                             value={endMinute}
                             onChange={(e) => handleEndMinuteChange(e.target.value)}
-                            className="w-full bg-slate-800 text-white text-xs font-semibold py-1 px-1 rounded border border-slate-700 text-center cursor-pointer"
+                            className="w-full bg-slate-50 dark:bg-white/[0.06] text-slate-900 dark:text-white text-xs font-medium py-1 px-1 rounded border border-slate-200 dark:border-white/[0.08] text-center cursor-pointer"
                           >
                             {["00","05","10","15","20","25","30","35","40","45","50","55"].map(m => (
                               <option key={m} value={m}>:{m}</option>
@@ -1320,14 +1392,14 @@ export default function StudyPlanPage() {
                           </select>
                         </div>
                         <div>
-                          <span className="block text-[8px] text-slate-400 uppercase font-semibold mb-0.5 text-center">AM/PM</span>
-                          <div className="flex rounded overflow-hidden border border-slate-700 bg-slate-800 h-[26px] p-0.5">
+                          <span className="block text-[9px] text-slate-400 uppercase font-medium mb-0.5 text-center">AM/PM</span>
+                          <div className="flex rounded border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-white/[0.06] h-[28px] p-0.5">
                             <button
                               type="button"
                               onClick={() => handleEndPeriodToggle("AM")}
                               className={clsx(
-                                "flex-1 text-[9px] font-bold rounded transition-all cursor-pointer flex items-center justify-center",
-                                endPeriod === "AM" ? "bg-purple-500 text-white shadow" : "text-slate-400 hover:text-white"
+                                "flex-1 text-[10px] font-semibold rounded transition-colors flex items-center justify-center cursor-pointer",
+                                endPeriod === "AM" ? "bg-purple-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                               )}
                             >
                               AM
@@ -1336,8 +1408,8 @@ export default function StudyPlanPage() {
                               type="button"
                               onClick={() => handleEndPeriodToggle("PM")}
                               className={clsx(
-                                "flex-1 text-[9px] font-bold rounded transition-all cursor-pointer flex items-center justify-center",
-                                endPeriod === "PM" ? "bg-purple-500 text-white shadow" : "text-slate-400 hover:text-white"
+                                "flex-1 text-[10px] font-semibold rounded transition-colors flex items-center justify-center cursor-pointer",
+                                endPeriod === "PM" ? "bg-purple-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                               )}
                             >
                               PM
@@ -1348,18 +1420,18 @@ export default function StudyPlanPage() {
                     </div>
 
                     {/* Duration input */}
-                    <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-700/60">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[11px] font-semibold text-slate-300">Duration (Mins)</span>
-                        <span className="font-mono text-xs text-emerald-400 font-bold">
-                          {formDurationInput ? `${formDurationInput}m` : "blank"}
+                    <div className="bg-white dark:bg-white/[0.04] p-3 rounded-lg border border-slate-200 dark:border-white/[0.08]">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Duration (Mins)</span>
+                        <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
+                          {formDurationInput ? `${formDurationInput}m` : ""}
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => handleDurationPreset(Math.max(15, (parseInt(formDurationInput, 10) || 60) - 15))}
-                          className="w-8 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 cursor-pointer shrink-0"
+                          className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.1] text-slate-700 dark:text-slate-200 font-semibold text-xs border border-slate-200 dark:border-white/[0.08] cursor-pointer shrink-0"
                           title="Decrease 15 mins"
                         >
                           -15
@@ -1371,13 +1443,13 @@ export default function StudyPlanPage() {
                             value={formDurationInput}
                             onChange={(e) => handleDurationInputChange(e.target.value)}
                             placeholder="Minutes"
-                            className="w-full text-center bg-slate-950 border border-slate-700 rounded py-0.5 text-xs sm:text-sm font-mono font-bold text-white focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                            className="w-full text-center bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-lg py-1.5 text-xs sm:text-sm font-mono font-semibold text-slate-900 dark:text-white focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
                           />
                         </div>
                         <button
                           type="button"
                           onClick={() => handleDurationPreset((parseInt(formDurationInput, 10) || 60) + 15)}
-                          className="w-8 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 cursor-pointer shrink-0"
+                          className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.1] text-slate-700 dark:text-slate-200 font-semibold text-xs border border-slate-200 dark:border-white/[0.08] cursor-pointer shrink-0"
                           title="Increase 15 mins"
                         >
                           +15
@@ -1387,10 +1459,10 @@ export default function StudyPlanPage() {
 
                     {/* Quick Duration Badges */}
                     <div>
-                      <div className="text-[9px] font-semibold text-slate-400 mb-1 flex items-center gap-1">
-                        <Zap className="w-3 h-3 text-amber-400" /> Quick Presets:
+                      <div className="text-[10px] font-medium text-slate-400 mb-1.5 flex items-center gap-1">
+                        <Zap className="w-3 h-3 text-amber-500" /> Presets:
                       </div>
-                      <div className="grid grid-cols-3 gap-1">
+                      <div className="grid grid-cols-3 gap-1.5">
                         {[
                           { label: "30m", mins: 30 },
                           { label: "45m", mins: 45 },
@@ -1406,10 +1478,10 @@ export default function StudyPlanPage() {
                               type="button"
                               onClick={() => handleDurationPreset(preset.mins)}
                               className={clsx(
-                                "py-0.5 px-1 rounded-md text-[11px] font-bold border transition-all text-center cursor-pointer",
+                                "py-1 px-1 rounded-md text-[11px] font-medium border transition-colors text-center cursor-pointer",
                                 isActive
-                                  ? "bg-emerald-500 text-white border-emerald-400 shadow-md shadow-emerald-500/20"
-                                  : "bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 border-slate-700/70"
+                                  ? "bg-emerald-500 text-white border-emerald-500 shadow-sm"
+                                  : "bg-white dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border-slate-200 dark:border-white/[0.08]"
                               )}
                             >
                               <div>{preset.label}</div>
@@ -1424,21 +1496,21 @@ export default function StudyPlanPage() {
             </div>
 
             {/* FIXED MODAL FOOTER */}
-            <div className="flex items-center justify-between border-t border-slate-800 p-3 sm:px-6 shrink-0 bg-slate-900/95">
-              <span className="text-xs text-slate-400 hidden sm:inline">
-                Scheduled: <strong className="text-white">{startHour}:{startMinute} {startPeriod} → {endHour}:{endMinute} {endPeriod}</strong>
+            <div className="flex items-center justify-between border-t border-slate-200 dark:border-white/[0.08] p-4 sm:px-6 shrink-0 bg-slate-50/60 dark:bg-white/[0.02]">
+              <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:inline">
+                Scheduled: <strong className="text-slate-700 dark:text-slate-200">{startHour}:{startMinute} {startPeriod} → {endHour}:{endMinute} {endPeriod}</strong>
               </span>
               <div className="flex items-center gap-2.5 ml-auto">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="px-3.5 py-2 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="btn-primary text-xs py-1.5 px-4 font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/20 cursor-pointer"
+                  className="btn-primary text-xs py-2 px-4 font-semibold flex items-center gap-2 cursor-pointer"
                 >
                   <CheckCircle2 className="w-4 h-4" /> Save Time Block
                 </button>

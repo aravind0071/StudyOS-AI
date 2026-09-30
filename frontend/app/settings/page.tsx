@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { profileApi, authApi, getErrorMessage } from "@/lib/api";
+import { profileApi, authApi, notificationsApi, getErrorMessage } from "@/lib/api";
 import { clearAuth, saveUser, getStoredUser } from "@/lib/auth";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -173,12 +173,29 @@ function ToggleSwitch({
   );
 }
 
+const ToggleItem = ToggleSwitch;
+
 export default function SettingsPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"profile" | "preferences" | "security">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "preferences" | "security" | "notifications">("profile");
+
+  // Notifications Settings State
+  const [notifSettings, setNotifSettings] = useState({
+    email_notifications: true,
+    login_alerts: true,
+    study_reminders: true,
+    exam_reminders: true,
+    study_plan_reminders: true,
+    in_app_notifications: true,
+    reminder_lead_minutes: 15,
+    exam_reminder_2_days: true,
+    exam_reminder_1_day: true,
+    exam_reminder_day_of: true,
+    timezone: "Asia/Kolkata",
+  });
+  const [savingNotif, setSavingNotif] = useState(false);
 
   // Theme state synchronized with studyos-theme
   const [currentTheme, setCurrentTheme] = useState<"dark" | "light">("dark");
@@ -262,7 +279,39 @@ export default function SettingsPage() {
       if (deg && !isKnownDeg) setCustomDegree(deg);
       if (br && !isKnownBr) setCustomBranch(br);
     }).finally(() => setLoading(false));
+
+    notificationsApi.getSettings().then((r) => {
+      const data = r.data?.settings || r.data;
+      if (data) {
+        setNotifSettings((prev) => ({
+          ...prev,
+          ...data,
+          reminder_lead_minutes: data.reminder_minutes_before ?? data.reminder_lead_minutes ?? prev.reminder_lead_minutes,
+          exam_reminder_2_days: data.exam_reminder_2days ?? data.exam_reminder_2_days ?? prev.exam_reminder_2_days,
+          exam_reminder_1_day: data.exam_reminder_1day ?? data.exam_reminder_1_day ?? prev.exam_reminder_1_day,
+        }));
+      }
+    }).catch(() => null);
   }, []);
+
+  const handleSaveNotifications = async () => {
+    try {
+      setSavingNotif(true);
+      await notificationsApi.updateSettings({
+        ...notifSettings,
+        reminder_minutes_before: notifSettings.reminder_lead_minutes,
+        exam_reminder_2days: notifSettings.exam_reminder_2_days,
+        exam_reminder_1day: notifSettings.exam_reminder_1_day,
+      });
+      toast.success("Notification preferences saved successfully.");
+    } catch {
+      toast.error("Failed to save notification preferences.");
+    } finally {
+      setSavingNotif(false);
+    }
+  };
+
+  const [saving, setSaving] = useState(false);
 
   const handleSaveProfile = async () => {
     setSaving(true);
@@ -351,7 +400,7 @@ export default function SettingsPage() {
     <div className="max-w-3xl mx-auto space-y-6 animate-fadeIn pb-12">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2.5">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
             <Settings className="w-5 h-5" />
           </div>
@@ -362,38 +411,28 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      {/* Tabs with dividing lines */}
-      <div className="flex items-center bg-slate-200/80 dark:bg-slate-800/80 p-1.5 rounded-xl border border-slate-300 dark:border-white/[0.1] shadow-inner">
+      {/* Tabs */}
+      <div className="flex items-center bg-slate-100 dark:bg-white/[0.04] p-1 rounded-xl border border-slate-200 dark:border-white/[0.08]">
         {[
           { id: "profile" as const, label: "Profile", icon: User },
           { id: "preferences" as const, label: "Preferences", icon: BookOpen },
           { id: "security" as const, label: "Security", icon: Shield },
-        ].map(({ id, label, icon: Icon }, index, array) => (
-          <div key={id} className="flex-1 flex items-center">
-            <button
-              type="button"
-              onClick={() => setActiveTab(id)}
-              className={clsx(
-                "w-full flex items-center justify-center gap-2 py-2.5 px-3 text-sm font-semibold rounded-lg transition-all duration-200",
-                activeTab === id
-                  ? "bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm border border-slate-200/80 dark:border-white/10"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/40 dark:hover:bg-slate-700/40"
-              )}
-            >
-              <Icon className="w-4 h-4" />
-              <span>{label}</span>
-            </button>
-            {index < array.length - 1 && (
-              <div
-                className={clsx(
-                  "w-[1.5px] h-5 mx-1 shrink-0 rounded-full transition-opacity duration-200",
-                  activeTab === id || activeTab === array[index + 1].id
-                    ? "opacity-0"
-                    : "bg-slate-300 dark:bg-slate-600 opacity-90"
-                )}
-              />
+          { id: "notifications" as const, label: "Notifications", icon: Bell },
+        ].map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActiveTab(id)}
+            className={clsx(
+              "flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs sm:text-sm font-medium rounded-lg transition-all",
+              activeTab === id
+                ? "bg-white dark:bg-white/[0.1] text-emerald-600 dark:text-emerald-400 shadow-sm border border-slate-200/80 dark:border-white/[0.08]"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             )}
-          </div>
+          >
+            <Icon className="w-4 h-4 shrink-0" />
+            <span>{label}</span>
+          </button>
         ))}
       </div>
 
@@ -402,11 +441,11 @@ export default function SettingsPage() {
         <div className="card p-6 space-y-6">
           {/* Avatar card */}
           <div className="flex items-center gap-4 pb-6 border-b border-slate-200 dark:border-white/[0.08]">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-emerald-500/10">
+            <div className="w-14 h-14 rounded-xl bg-emerald-600 text-white font-bold text-lg flex items-center justify-center shrink-0">
               {form.full_name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() || "SU"}
             </div>
             <div>
-              <div className="font-bold text-lg text-slate-900 dark:text-white">{form.full_name || "Student"}</div>
+              <div className="font-semibold text-lg text-slate-900 dark:text-white">{form.full_name || "Student"}</div>
               <div className="text-slate-500 dark:text-slate-400 text-sm">{profile?.email}</div>
               {form.college && (
                 <div className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
@@ -593,23 +632,22 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={() => handleSelectTheme("dark")}
-                style={{ backgroundColor: "#0b0f19" }}
                 className={clsx(
-                  "flex items-center gap-4 p-4 rounded-xl border text-left transition-all relative overflow-hidden",
+                  "card card-hover flex items-center gap-4 p-4 text-left transition-all relative cursor-pointer",
                   currentTheme === "dark"
-                    ? "border-emerald-500 ring-2 ring-emerald-500/25 shadow-lg shadow-emerald-500/10"
-                    : "border-slate-700/80 hover:border-slate-500"
+                    ? "border-emerald-500 ring-1 ring-emerald-500/20 bg-slate-900/90 text-white"
+                    : "border-slate-200 dark:border-white/[0.08]"
                 )}
               >
-                <div className="w-10 h-10 rounded-lg bg-[#07090e] border border-white/15 flex items-center justify-center text-emerald-400 shrink-0">
-                  <Moon className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-lg bg-slate-950 border border-white/10 flex items-center justify-center text-emerald-400 shrink-0">
+                  <Moon className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-white text-sm flex items-center justify-between">
+                  <div className="font-semibold text-sm flex items-center justify-between text-slate-900 dark:text-white">
                     <span>Dark Obsidian</span>
-                    {currentTheme === "dark" && <Check className="w-4 h-4 text-emerald-400 shrink-0" />}
+                    {currentTheme === "dark" && <Check className="w-4 h-4 text-emerald-500 shrink-0" />}
                   </div>
-                  <div className="text-slate-400 text-xs mt-0.5">High-contrast slate black for focus</div>
+                  <div className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">High-contrast slate black for focus</div>
                 </div>
               </button>
 
@@ -617,23 +655,22 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={() => handleSelectTheme("light")}
-                style={{ backgroundColor: "#f8fafc" }}
                 className={clsx(
-                  "flex items-center gap-4 p-4 rounded-xl border text-left transition-all relative overflow-hidden",
+                  "card card-hover flex items-center gap-4 p-4 text-left transition-all relative cursor-pointer",
                   currentTheme === "light"
-                    ? "border-emerald-500 ring-2 ring-emerald-500/25 shadow-md shadow-emerald-500/10"
-                    : "border-slate-300 dark:border-slate-700 hover:border-slate-400"
+                    ? "border-emerald-500 ring-1 ring-emerald-500/20 bg-slate-50 text-slate-900"
+                    : "border-slate-200 dark:border-white/[0.08]"
                 )}
               >
-                <div className="w-10 h-10 rounded-lg bg-white border border-slate-300 flex items-center justify-center text-emerald-600 shrink-0 shadow-sm">
-                  <Sun className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-emerald-600 shrink-0 shadow-sm">
+                  <Sun className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-slate-900 text-sm flex items-center justify-between">
+                  <div className="font-semibold text-sm flex items-center justify-between text-slate-900 dark:text-white">
                     <span>Light Slate</span>
-                    {currentTheme === "light" && <Check className="w-4 h-4 text-emerald-600 shrink-0" />}
+                    {currentTheme === "light" && <Check className="w-4 h-4 text-emerald-500 shrink-0" />}
                   </div>
-                  <div className="text-slate-600 text-xs mt-0.5">Clean daylight friendly aesthetic</div>
+                  <div className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">Clean daylight friendly aesthetic</div>
                 </div>
               </button>
             </div>
@@ -898,6 +935,182 @@ export default function SettingsPage() {
             >
               <LogOut className="w-4 h-4" /> Sign Out Now
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── NOTIFICATIONS TAB ─────────────────────────────────────────────────── */}
+      {activeTab === "notifications" && (
+        <div className="space-y-6">
+          <div className="card p-6 space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-white/[0.08]">
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-emerald-500" /> Notification Channels & Alerts
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Configure real-time email alerts, timetable reminders, and security notifications.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleSaveNotifications}
+                disabled={savingNotif}
+                className="btn-primary flex items-center gap-2 text-xs"
+              >
+                {savingNotif ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                Save Changes
+              </button>
+            </div>
+
+            {/* General Toggles */}
+            <div className="divide-y divide-slate-200 dark:divide-white/[0.08]">
+              <ToggleItem
+                label="Email Notifications"
+                description="Master switch to deliver alerts and schedule reminders directly to your inbox."
+                checked={notifSettings.email_notifications}
+                onChange={(val: boolean) => setNotifSettings((s) => ({ ...s, email_notifications: val }))}
+              />
+
+              <ToggleItem
+                label="New Login Security Alerts"
+                description="Send an email with device, browser, and timestamp details when a successful login occurs."
+                checked={notifSettings.login_alerts}
+                onChange={(val: boolean) => setNotifSettings((s) => ({ ...s, login_alerts: val }))}
+              />
+
+              <ToggleItem
+                label="In-App Notification Center"
+                description="Display live bell badges and notification dropdown cards within StudyOS AI."
+                checked={notifSettings.in_app_notifications}
+                onChange={(val: boolean) => setNotifSettings((s) => ({ ...s, in_app_notifications: val }))}
+              />
+
+              <ToggleItem
+                label="Study Time Reminders"
+                description="Receive an email notice prior to your scheduled study sessions."
+                checked={notifSettings.study_reminders}
+                onChange={(val: boolean) => setNotifSettings((s) => ({ ...s, study_reminders: val }))}
+              />
+
+              <ToggleItem
+                label="Exam Countdown Reminders"
+                description="Receive automated milestone revision notifications as upcoming exam dates approach."
+                checked={notifSettings.exam_reminders}
+                onChange={(val: boolean) => setNotifSettings((s) => ({ ...s, exam_reminders: val }))}
+              />
+
+              <ToggleItem
+                label="Study Plan Task Reminders"
+                description="Notify when planned curriculum tasks and daily revision goals are due."
+                checked={notifSettings.study_plan_reminders}
+                onChange={(val: boolean) => setNotifSettings((s) => ({ ...s, study_plan_reminders: val }))}
+              />
+            </div>
+          </div>
+
+          {/* Lead Times & Scheduling Preferences */}
+          <div className="card p-6 space-y-5">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Clock className="w-5 h-5 text-emerald-500" /> Reminder Timing & Timezone
+            </h2>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Study Reminder Lead Time
+                </label>
+                <select
+                  value={notifSettings.reminder_lead_minutes}
+                  onChange={(e) =>
+                    setNotifSettings((s) => ({ ...s, reminder_lead_minutes: Number(e.target.value) }))
+                  }
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value={10}>10 minutes before</option>
+                  <option value={15}>15 minutes before (Recommended)</option>
+                  <option value={30}>30 minutes before</option>
+                  <option value={60}>1 hour before</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Your Local Timezone
+                </label>
+                <select
+                  value={notifSettings.timezone}
+                  onChange={(e) =>
+                    setNotifSettings((s) => ({ ...s, timezone: e.target.value }))
+                  }
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="Asia/Kolkata">Asia/Kolkata (IST • UTC+05:30)</option>
+                  <option value="UTC">UTC (Coordinated Universal Time)</option>
+                  <option value="America/New_York">America/New_York (EST/EDT)</option>
+                  <option value="America/Los_Angeles">America/Los_Angeles (PST/PDT)</option>
+                  <option value="Europe/London">Europe/London (GMT/BST)</option>
+                  <option value="Asia/Dubai">Asia/Dubai (GST • UTC+04:00)</option>
+                  <option value="Asia/Singapore">Asia/Singapore (SGT • UTC+08:00)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Exam Milestones */}
+            <div className="pt-4 border-t border-slate-200 dark:border-white/[0.08]">
+              <span className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                Exam Reminder Schedule
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-800 dark:text-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notifSettings.exam_reminder_2_days}
+                    onChange={(e) =>
+                      setNotifSettings((s) => ({ ...s, exam_reminder_2_days: e.target.checked }))
+                    }
+                    className="rounded text-emerald-500 focus:ring-emerald-500 w-4 h-4"
+                  />
+                  <span>2 Days Before Exam</span>
+                </label>
+
+                <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-800 dark:text-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notifSettings.exam_reminder_1_day}
+                    onChange={(e) =>
+                      setNotifSettings((s) => ({ ...s, exam_reminder_1_day: e.target.checked }))
+                    }
+                    className="rounded text-emerald-500 focus:ring-emerald-500 w-4 h-4"
+                  />
+                  <span>1 Day Before (Final Prep)</span>
+                </label>
+
+                <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-800 dark:text-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notifSettings.exam_reminder_day_of}
+                    onChange={(e) =>
+                      setNotifSettings((s) => ({ ...s, exam_reminder_day_of: e.target.checked }))
+                    }
+                    className="rounded text-emerald-500 focus:ring-emerald-500 w-4 h-4"
+                  />
+                  <span>Exam Day Morning</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="pt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={handleSaveNotifications}
+                disabled={savingNotif}
+                className="btn-primary flex items-center gap-2 text-xs"
+              >
+                {savingNotif ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                Save Preferences
+              </button>
+            </div>
           </div>
         </div>
       )}

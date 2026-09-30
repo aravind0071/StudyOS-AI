@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
-from app.models.models import User, StudyPlan, StudyTask, UserConceptMastery, Concept
+from app.models.models import User, StudyPlan, StudyTask, UserConceptMastery, Concept, Notification
 
 router = APIRouter(prefix="/study-plan", tags=["Study Plan"])
 
@@ -16,7 +16,35 @@ router = APIRouter(prefix="/study-plan", tags=["Study Plan"])
 class GeneratePlanRequest(BaseModel):
     subject: Optional[str] = None
     exam_date: Optional[str] = None  # ISO date string
+    available_hours_per_day: Optional[float] = 2.0
+    current_knowledge_level: Optional[str] = "intermediate"  # beginner, intermediate, advanced
+    preferred_study_time: Optional[str] = "evening"          # morning, afternoon, evening, night
     topics: Optional[list[str]] = None
+
+
+class CustomTaskCreate(BaseModel):
+    plan_id: Optional[str] = None
+    topic: str
+    activity: Optional[str] = "Practice & Review"
+    duration_minutes: Optional[int] = 45
+    day_number: Optional[int] = 1
+    scheduled_date: Optional[str] = None
+    priority: Optional[int] = 1
+    reason: Optional[str] = "Student added custom task"
+
+
+class TaskEditRequest(BaseModel):
+    topic: Optional[str] = None
+    activity: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    priority: Optional[int] = None
+    reason: Optional[str] = None
+    is_completed: Optional[bool] = None
+
+
+class TaskRescheduleRequest(BaseModel):
+    day_number: Optional[int] = None
+    scheduled_date: Optional[str] = None
 
 
 @router.post("/generate")
@@ -183,13 +211,142 @@ def get_active_plan(
     }
 
 
+@router.post("/tasks")
+def add_custom_task(
+    payload: CustomTaskCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Add a custom task to the active study plan, or create an active plan if none exists."""
+    plan = None
+    if payload.plan_id:
+        plan = db.query(StudyPlan).filter(StudyPlan.id == payload.plan_id, StudyPlan.user_id == current_user.id).first()
+    if not plan:
+        plan = db.query(StudyPlan).filter(StudyPlan.user_id == current_user.id, StudyPlan.is_active == True).first()
+    if not plan:
+        plan = StudyPlan(
+            user_id=current_user.id,
+            title="My Study Plan",
+            is_active=True,
+        )
+        db.add(plan)
+        db.commit()
+        db.refresh(plan)
+
+    scheduled_dt = None
+    if payload.scheduled_date:
+        try:
+            scheduled_dt = datetime.fromisoformat(payload.scheduled_date.replace("Z", "+00:00"))
+        except Exception:
+            scheduled_dt = datetime.now(timezone.utc) + timedelta(days=payload.day_number - 1)
+    else:
+        scheduled_dt = datetime.now(timezone.utc) + timedelta(days=payload.day_number - 1)
+
+    task = StudyTask(
+        plan_id=plan.id,
+        user_id=current_user.id,
+        day_number=payload.day_number or 1,
+        scheduled_date=scheduled_dt,
+        topic=payload.topic.strip(),
+        activity=payload.activity or "Practice & Review",
+        duration_minutes=payload.duration_minutes or 45,
+        priority=payload.priority or 1,
+        reason=payload.reason or "Student custom task",
+        is_completed=False,
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+
+    return {
+        "message": "Task added successfully",
+        "task": {
+            "id": str(task.id),
+            "day": task.day_number,
+            "scheduled_date": task.scheduled_date.isoformat() if task.scheduled_date else None,
+            "topic": task.topic,
+            "activity": task.activity,
+            "duration_minutes": task.duration_minutes,
+            "priority": task.priority,
+            "reason": task.reason,
+            "is_completed": task.is_completed,
+        }
+    }
+
+
+@router.patch("/tasks/{task_id}")
+def edit_task(
+    task_id: str,
+    payload: TaskEditRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Edit task details (topic, activity, duration, priority, reason, completion)."""
+    task = (
+        db.query(StudyTask)
+        .filter(StudyTask.id == task_id, StudyTask.user_id == current_user.id)
+        .first()
+    )
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found.")
+
+    if payload.topic is not None:
+        task.topic = payload.topic.strip()
+    if payload.activity is not None:
+        task.activity = payload.activity.strip()
+    if payload.duration_minutes is not None:
+        task.duration_minutes = payload.duration_minutes
+    if payload.priority is not None:
+        task.priority = payload.priority
+    if payload.reason is not None:
+        task.reason = payload.reason
+    if payload.is_completed is not None:
+        was_completed = task.is_completed
+        task.is_completed = payload.is_completed
+        if payload.is_completed and not was_completed:
+            task.completed_at = datetime.now(timezone.utc)
+            # Add notification
+            try:
+                notif = Notification(
+                    user_id=current_user.id,
+                    title="Study plan task completed",
+                    message=f"Great job! You completed: {task.topic}",
+                    notification_type="study_reminder",
+                    action_url="/study-plan",
+                )
+                db.add(notif)
+            except Exception:
+                pass
+        elif not payload.is_completed:
+            task.completed_at = None
+
+    db.commit()
+    db.refresh(task)
+
+    return {
+        "message": "Task updated successfully",
+        "task": {
+            "id": str(task.id),
+            "day": task.day_number,
+            "scheduled_date": task.scheduled_date.isoformat() if task.scheduled_date else None,
+            "topic": task.topic,
+            "activity": task.activity,
+            "duration_minutes": task.duration_minutes,
+            "priority": task.priority,
+            "reason": task.reason,
+            "is_completed": task.is_completed,
+        }
+    }
+
+
 @router.patch("/task/{task_id}")
-def update_task(
+def update_task_legacy(
     task_id: str,
     is_completed: bool,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """Backwards-compatible completion toggle."""
     task = (
         db.query(StudyTask)
         .filter(StudyTask.id == task_id, StudyTask.user_id == current_user.id)
@@ -201,6 +358,72 @@ def update_task(
     task.is_completed = is_completed
     if is_completed:
         task.completed_at = datetime.now(timezone.utc)
+        try:
+            notif = Notification(
+                user_id=current_user.id,
+                title="Study plan task completed",
+                message=f"Great job! You completed: {task.topic}",
+                notification_type="study_reminder",
+                action_url="/study-plan",
+            )
+            db.add(notif)
+        except Exception:
+            pass
+    else:
+        task.completed_at = None
     db.commit()
 
     return {"message": "Task updated.", "is_completed": task.is_completed}
+
+
+@router.patch("/tasks/{task_id}/reschedule")
+def reschedule_task(
+    task_id: str,
+    payload: TaskRescheduleRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Reschedule task to another day number or date."""
+    task = (
+        db.query(StudyTask)
+        .filter(StudyTask.id == task_id, StudyTask.user_id == current_user.id)
+        .first()
+    )
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found.")
+
+    if payload.day_number is not None:
+        task.day_number = payload.day_number
+    if payload.scheduled_date is not None:
+        try:
+            task.scheduled_date = datetime.fromisoformat(payload.scheduled_date.replace("Z", "+00:00"))
+        except Exception:
+            pass
+
+    db.commit()
+    return {
+        "message": "Task rescheduled successfully",
+        "day": task.day_number,
+        "scheduled_date": task.scheduled_date.isoformat() if task.scheduled_date else None,
+    }
+
+
+@router.delete("/tasks/{task_id}")
+def delete_task(
+    task_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a task."""
+    task = (
+        db.query(StudyTask)
+        .filter(StudyTask.id == task_id, StudyTask.user_id == current_user.id)
+        .first()
+    )
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found.")
+
+    db.delete(task)
+    db.commit()
+    return {"message": "Task deleted successfully"}
+

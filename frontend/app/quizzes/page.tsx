@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { quizApi, getErrorMessage } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -41,6 +41,16 @@ export default function QuizzesPage() {
   const [difficulty, setDifficulty] = useState("medium");
   const [quizType, setQuizType] = useState("mcq");
   const [numQuestions, setNumQuestions] = useState(10);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search);
+      const top = sp.get("topic");
+      const subj = sp.get("subject");
+      if (top) setTopics(top);
+      if (subj) setSubject(subj);
+    }
+  }, []);
 
   // Quiz state
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -114,7 +124,7 @@ export default function QuizzesPage() {
       <div className="space-y-6 animate-fadeIn">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
               <ClipboardList className="w-5 h-5 text-emerald-500" /> Practice & Generate Quizzes
             </h1>
             <p className="text-slate-500 dark:text-slate-400 text-sm">
@@ -393,11 +403,17 @@ export default function QuizzesPage() {
           {currentQ.options?.length > 0 && (
             <div className="space-y-3">
               {currentQ.options.map((opt, i) => (
-                <button key={i} type="button" onClick={() => setAnswers(a => ({ ...a, [currentQ.id]: opt }))}
-                  className={clsx("w-full text-left px-4 py-3.5 rounded-xl border text-sm font-medium transition-all",
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setAnswers(a => ({ ...a, [currentQ.id]: opt }))}
+                  className={clsx(
+                    "w-full text-left px-4 py-3.5 rounded-xl border text-sm font-medium transition-all cursor-pointer",
                     answers[currentQ.id] === opt
-                      ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 font-semibold ring-2 ring-emerald-500/20"
-                      : "border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:border-emerald-500/30 hover:bg-slate-50 dark:hover:bg-slate-800/80 bg-white dark:bg-slate-900/40")}>
+                      ? "bg-emerald-500/10 border-emerald-500 text-emerald-700 dark:text-emerald-300 font-semibold ring-1 ring-emerald-500/30"
+                      : "border-slate-200 dark:border-white/[0.08] text-slate-800 dark:text-slate-200 hover:border-emerald-500/40 hover:bg-slate-50 dark:hover:bg-white/[0.03] bg-white dark:bg-slate-900/50"
+                  )}
+                >
                   {opt}
                 </button>
               ))}
@@ -417,12 +433,12 @@ export default function QuizzesPage() {
         </div>
 
         {/* Navigation */}
-        <div className="flex gap-3 justify-between">
-          {currentIdx > 0 && (
+        <div className="flex gap-3 justify-between items-center">
+          {currentIdx > 0 ? (
             <button onClick={() => setCurrentIdx(i => i - 1)} className="btn-secondary">
               ← Previous
             </button>
-          )}
+          ) : <div />}
           <div className="flex-1" />
           {currentIdx < questions.length - 1 ? (
             <button onClick={() => setCurrentIdx(i => i + 1)} className="btn-primary">
@@ -437,13 +453,20 @@ export default function QuizzesPage() {
         </div>
 
         {/* Question dots */}
-        <div className="flex gap-1.5 flex-wrap justify-center mt-2">
+        <div className="flex gap-1.5 flex-wrap justify-center mt-3">
           {questions.map((q, i) => (
-            <button key={i} onClick={() => setCurrentIdx(i)}
-              className={clsx("w-7 h-7 rounded-lg text-xs font-medium transition-all",
-                i === currentIdx ? "bg-emerald-500 text-white"
-                  : answers[q.id] ? "bg-emerald-500/20 text-emerald-400"
-                  : "bg-slate-800 text-slate-500")}>
+            <button
+              key={i}
+              onClick={() => setCurrentIdx(i)}
+              className={clsx(
+                "w-7 h-7 rounded-lg text-xs font-semibold transition-all border cursor-pointer",
+                i === currentIdx
+                  ? "bg-emerald-500 text-white border-emerald-500 shadow-sm"
+                  : answers[q.id]
+                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                  : "bg-slate-100 dark:bg-white/[0.04] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.15]"
+              )}
+            >
               {i + 1}
             </button>
           ))}
@@ -461,7 +484,7 @@ export default function QuizzesPage() {
       <div className="max-w-4xl mx-auto space-y-6 animate-fadeIn">
         {/* Score card */}
         <div className="card p-8 text-center">
-          <div className={`text-6xl font-black ${scoreColor} mb-2`}>
+          <div className={`text-5xl font-bold tracking-tight ${scoreColor} mb-2`}>
             {result.score.toFixed(0)}%
           </div>
           <p className="text-slate-800 dark:text-slate-200 font-semibold text-lg mb-1">{result.message}</p>

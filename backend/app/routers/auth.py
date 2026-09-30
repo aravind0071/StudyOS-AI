@@ -1,8 +1,8 @@
 """Auth router — all authentication endpoints."""
 
-from datetime import timedelta
+from datetime import timedelta, datetime, timezone
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -12,7 +12,7 @@ from app.core.security import (
     verify_password,
     create_access_token,
 )
-from app.models.models import User, Profile, OTPPurpose
+from app.models.models import User, Profile, OTPPurpose, Notification, UserNotificationSettings
 from app.schemas.auth import (
     RegisterRequest,
     RegisterResponse,
@@ -26,9 +26,46 @@ from app.schemas.auth import (
     ResetPasswordRequest,
 )
 from app.services.otp_service import create_and_send_otp, verify_otp
+from app.services.email_service import send_login_notification_email, is_smtp_configured
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+def parse_user_agent(ua_string: str) -> tuple[str, str]:
+    """Extract (device, browser) safely from User-Agent string."""
+    if not ua_string:
+        return "Unknown Device", "Web Browser"
+
+    browser = "Web Browser"
+    if "Edg/" in ua_string or "Edge/" in ua_string:
+        browser = "Microsoft Edge"
+    elif "Chrome/" in ua_string and "Safari/" in ua_string:
+        browser = "Google Chrome"
+    elif "Firefox/" in ua_string:
+        browser = "Mozilla Firefox"
+    elif "Safari/" in ua_string and "Chrome" not in ua_string:
+        browser = "Apple Safari"
+    elif "Opera/" in ua_string or "OPR/" in ua_string:
+        browser = "Opera"
+
+    device = "Unknown Device"
+    if "Windows NT 10.0" in ua_string:
+        device = "Windows 10/11 PC"
+    elif "Windows" in ua_string:
+        device = "Windows PC"
+    elif "Macintosh" in ua_string or "Mac OS X" in ua_string:
+        device = "Macintosh (macOS)"
+    elif "iPhone" in ua_string:
+        device = "Apple iPhone"
+    elif "iPad" in ua_string:
+        device = "Apple iPad"
+    elif "Android" in ua_string:
+        device = "Android Device"
+    elif "Linux" in ua_string:
+        device = "Linux Workstation"
+
+    return device, browser
 
 
 # ─── REGISTER ────────────────────────────────────────────────────────────────
@@ -106,11 +143,13 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         else "Registration initiated! Please enter your verification code."
     )
 
+    demo_otp = otp_info.get("demo_otp") if (not otp_info.get("email_sent") and settings.DEMO_MODE) else None
+
     return RegisterResponse(
         message=msg,
         user_id=str(user.id),
         email=user.email,
-        demo_otp=otp_info.get("demo_otp"),
+        demo_otp=demo_otp,
         email_sent=otp_info.get("email_sent", False),
     )
 
@@ -170,13 +209,15 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
             logger.error(f"Registration OTP send failed during login: {e}")
             otp_info = {"email_sent": False, "demo_otp": None}
 
+        demo_otp = otp_info.get("demo_otp") if (not otp_info.get("email_sent") and settings.DEMO_MODE) else None
+
         return LoginResponse(
             message="Your account is not verified yet. Verification code has been issued.",
             user_id=str(user.id),
             email=user.email,
             requires_otp=True,
             is_registration_verification=True,
-            demo_otp=otp_info.get("demo_otp"),
+            demo_otp=demo_otp,
             email_sent=otp_info.get("email_sent", False),
         )
 
@@ -189,13 +230,15 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         logger.error(f"Login OTP send failed: {e}")
         otp_info = {"email_sent": False, "demo_otp": None}
 
+    demo_otp = otp_info.get("demo_otp") if (not otp_info.get("email_sent") and settings.DEMO_MODE) else None
+
     return LoginResponse(
         message="Credentials verified. Please enter the verification code.",
         user_id=str(user.id),
         email=user.email,
         requires_otp=True,
         is_registration_verification=False,
-        demo_otp=otp_info.get("demo_otp"),
+        demo_otp=demo_otp,
         email_sent=otp_info.get("email_sent", False),
     )
 
@@ -203,7 +246,12 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 # ─── VERIFY LOGIN OTP ─────────────────────────────────────────────────────────
 
 @router.post("/verify-login-otp", response_model=VerifyOTPResponse)
-def verify_login_otp(payload: VerifyOTPRequest, db: Session = Depends(get_db)):
+def verify_login_otp(
+    payload: VerifyOTPRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     user = db.query(User).filter(User.id == payload.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
@@ -211,6 +259,48 @@ def verify_login_otp(payload: VerifyOTPRequest, db: Session = Depends(get_db)):
     verify_otp(db, user, payload.otp, OTPPurpose.LOGIN)
 
     access_token = create_access_token(data={"sub": str(user.id)})
+
+    # Safe Device & Browser Extraction
+    ua = request.headers.get("user-agent", "")
+    device, browser = parse_user_agent(ua)
+
+    # Format login time in user's timezone (default Asia/Kolkata)
+    user_settings = db.query(UserNotificationSettings).filter(UserNotificationSettings.user_id == user.id).first()
+    tz_str = user_settings.timezone if (user_settings and user_settings.timezone) else "Asia/Kolkata"
+
+    try:
+        from zoneinfo import ZoneInfo
+        now_local = datetime.now(ZoneInfo(tz_str))
+        formatted_time = now_local.strftime("%d %b %Y, %I:%M %p") + f" ({tz_str})"
+    except Exception:
+        now_local = datetime.now(timezone.utc)
+        formatted_time = now_local.strftime("%d %b %Y, %I:%M %p UTC")
+
+    # In-App Notification (Recorded for security audit log)
+    notif = Notification(
+        user_id=user.id,
+        title="🔐 New login detected",
+        message=f"Logged in from {browser} on {device} ({formatted_time})",
+        category="security",
+        link="/settings",
+    )
+    db.add(notif)
+    db.commit()
+
+    # Email notification (if user has login alerts enabled)
+    should_send_email = True
+    if user_settings and (user_settings.login_alerts is False or user_settings.email_notifications is False):
+        should_send_email = False
+
+    if should_send_email and is_smtp_configured():
+        background_tasks.add_task(
+            send_login_notification_email,
+            recipient_email=user.email,
+            recipient_name=user.full_name,
+            login_time=formatted_time,
+            device=device,
+            browser=browser,
+        )
 
     return VerifyOTPResponse(
         message="Login successful! Welcome back.",
@@ -237,6 +327,8 @@ def resend_otp(payload: ResendOTPRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Invalid OTP purpose.")
 
     info = create_and_send_otp(db, user, purpose)
+    if info.get("email_sent") or not settings.DEMO_MODE:
+        info["demo_otp"] = None
     return {
         "message": "A new verification code has been sent.",
         **info,
@@ -264,10 +356,16 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
     except Exception as e:
         logger.error(f"Password reset OTP failed: {e}")
 
+    demo_otp = (
+        otp_info.get("demo_otp")
+        if (otp_info and not otp_info.get("email_sent") and settings.DEMO_MODE)
+        else None
+    )
+
     return ForgotPasswordResponse(
         message=generic_message,
         user_id=str(user.id),
-        demo_otp=otp_info.get("demo_otp") if otp_info else None,
+        demo_otp=demo_otp,
         email_sent=otp_info.get("email_sent", True) if otp_info else False,
     )
 

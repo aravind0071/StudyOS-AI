@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Brain, ChevronRight, ChevronLeft, Loader2, GraduationCap,
-  Target, Clock, Calendar, Layers, Building2, ChevronDown
+  Target, Clock, Calendar, Layers, Building2, ChevronDown,
+  BookOpen, Briefcase, Trophy, Mic
 } from "lucide-react";
 import { profileApi, getErrorMessage } from "@/lib/api";
 import { saveUser } from "@/lib/auth";
@@ -13,11 +14,11 @@ import { toast } from "sonner";
 import clsx from "clsx";
 
 const GOALS = [
-  { id: "semester_exams", label: "Semester Exams", icon: "📚" },
-  { id: "placements", label: "Placements", icon: "💼" },
-  { id: "competitive_exams", label: "Competitive Exams", icon: "🏆" },
-  { id: "interviews", label: "Interviews", icon: "🎤" },
-  { id: "general_learning", label: "General Learning", icon: "🧠" },
+  { id: "semester_exams", label: "Semester Exams", icon: BookOpen },
+  { id: "placements", label: "Placements", icon: Briefcase },
+  { id: "competitive_exams", label: "Competitive Exams", icon: Trophy },
+  { id: "interviews", label: "Interviews", icon: Mic },
+  { id: "general_learning", label: "General Learning", icon: Brain },
 ];
 
 const STUDY_TIMES = [
@@ -204,7 +205,7 @@ export default function OnboardingPage() {
       } catch {
         // Ignore fallback error
       }
-      toast.success("Welcome to StudyOS AI! 🎉");
+      toast.success("Welcome to StudyOS AI! Your workspace is ready.");
       router.push("/dashboard");
     } catch (err) {
       toast.error(getErrorMessage(err));
@@ -221,22 +222,19 @@ export default function OnboardingPage() {
   ];
 
   return (
-    <div className="min-h-screen hero-gradient flex items-center justify-center p-4 relative">
+    <div className="min-h-screen flex items-center justify-center p-4 relative bg-slate-50 dark:bg-[#07090e]">
       {/* Floating Theme Toggle top-right */}
       <div className="fixed top-4 right-4 z-50">
         <ThemeToggle />
       </div>
 
-      <div className="fixed top-1/4 left-1/4 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="fixed bottom-1/4 right-1/4 w-72 h-72 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
-
       <div className="w-full max-w-md animate-fadeIn relative">
         {/* Logo */}
-        <div className="text-center mb-7">
-          <div className="w-14 h-14 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-emerald-500/30">
-            <Brain className="w-8 h-8 text-white" />
+        <div className="text-center mb-6">
+          <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-sm text-white">
+            <Brain className="w-6 h-6" />
           </div>
-          <h1 className="text-2xl font-black text-slate-900 dark:text-white">Welcome to StudyOS AI</h1>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Welcome to StudyOS AI</h1>
           <p className="text-slate-600 dark:text-slate-400 text-xs mt-1">Let's set up your personalized learning space</p>
         </div>
 
@@ -246,15 +244,15 @@ export default function OnboardingPage() {
             <span>Step {step + 1} of {totalSteps}</span>
             <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{progress.toFixed(0)}% complete</span>
           </div>
-          <div className="progress-bar h-2">
+          <div className="progress-bar h-1.5">
             <div className="progress-fill bg-emerald-500" style={{ width: `${progress}%` }} />
           </div>
         </div>
 
         {/* Card */}
-        <div className="card-glass p-7 shadow-2xl">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-1">{stepTitles[step].title}</h2>
-          <p className="text-slate-600 dark:text-slate-400 text-xs mb-6">{stepTitles[step].subtitle}</p>
+        <div className="card p-6 sm:p-7 border border-slate-200 dark:border-white/[0.08] shadow-sm">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-1">{stepTitles[step].title}</h2>
+          <p className="text-slate-600 dark:text-slate-400 text-xs mb-5">{stepTitles[step].subtitle}</p>
 
           {/* Step 0: Academic info */}
           {step === 0 && (
@@ -399,25 +397,40 @@ export default function OnboardingPage() {
           {/* Step 2: Goals */}
           {step === 2 && (
             <div className="grid grid-cols-1 gap-2.5">
-              {GOALS.map(goal => (
-                <button
-                  key={goal.id}
-                  type="button"
-                  onClick={() => toggleGoal(goal.id)}
-                  className={clsx(
-                    "flex items-center gap-3.5 p-3.5 rounded-xl border text-left transition-all cursor-pointer",
-                    form.goals.includes(goal.id)
-                      ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/30 font-semibold"
-                      : "border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50 dark:bg-slate-900/30"
-                  )}
-                >
-                  <span className="text-xl">{goal.icon}</span>
-                  <span className="text-sm font-medium">{goal.label}</span>
-                  {form.goals.includes(goal.id) && (
-                    <span className="ml-auto text-emerald-600 dark:text-emerald-400 font-bold">✓</span>
-                  )}
-                </button>
-              ))}
+              {GOALS.map(goal => {
+                const Icon = goal.icon;
+                const isSelected = form.goals.includes(goal.id);
+                return (
+                  <button
+                    key={goal.id}
+                    type="button"
+                    onClick={() => toggleGoal(goal.id)}
+                    className={clsx(
+                      "flex items-center gap-3.5 p-3.5 rounded-xl border text-left transition-all cursor-pointer",
+                      isSelected
+                        ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 font-semibold ring-1 ring-emerald-500/30"
+                        : "border-slate-200 dark:border-white/[0.08] text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-white/[0.15] bg-white dark:bg-white/[0.02]"
+                    )}
+                  >
+                    <div
+                      className={clsx(
+                        "w-8 h-8 rounded-lg flex items-center justify-center border flex-shrink-0 transition-colors",
+                        isSelected
+                          ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
+                          : "bg-slate-100 dark:bg-white/[0.04] border-slate-200 dark:border-white/[0.06] text-slate-500 dark:text-slate-400"
+                      )}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <span className="text-sm font-medium">{goal.label}</span>
+                    {isSelected && (
+                      <span className="ml-auto text-emerald-600 dark:text-emerald-400 text-xs font-semibold px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                        Selected
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -430,13 +443,13 @@ export default function OnboardingPage() {
                   type="button"
                   onClick={() => setForm(f => ({ ...f, daily_study_minutes: t.value }))}
                   className={clsx(
-                    "p-4 rounded-xl border text-center font-semibold transition-all cursor-pointer",
+                    "p-4 rounded-xl border text-center font-medium transition-all cursor-pointer",
                     form.daily_study_minutes === t.value
-                      ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/30"
-                      : "border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50 dark:bg-slate-900/30"
+                      ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/30 font-semibold"
+                      : "border-slate-200 dark:border-white/[0.08] text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-white/[0.15] bg-white dark:bg-white/[0.02]"
                   )}
                 >
-                  <Clock className="w-5 h-5 mx-auto mb-1.5 opacity-70" />
+                  <Clock className="w-5 h-5 mx-auto mb-1.5 opacity-70 text-slate-500 dark:text-slate-400" />
                   <span className="text-sm">{t.label}</span>
                 </button>
               ))}
@@ -472,7 +485,7 @@ export default function OnboardingPage() {
               className="btn-primary flex items-center gap-2 py-2.5 px-6 text-sm cursor-pointer"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Target className="w-4 h-4" />}
-              {loading ? "Setting up..." : "Complete Setup 🚀"}
+              {loading ? "Setting up..." : "Complete Setup"}
             </button>
           )}
         </div>

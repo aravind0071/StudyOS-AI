@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 
+import { notificationsApi, remindersApi } from "@/lib/api";
+
 export interface NotificationItem {
   id: string;
   title: string;
@@ -51,26 +53,6 @@ const DEFAULT_NOTIFICATIONS: NotificationItem[] = [
     link: "/quizzes",
     actionText: "Take Quick Quiz",
   },
-  {
-    id: "notif-4",
-    title: "Knowledge Vault Ready",
-    message: "Drop PDFs, PPTX, or class notes in Knowledge Vault to auto-build your personalized Knowledge Graph.",
-    category: "vault",
-    timestamp: "2 hours ago",
-    read: true,
-    link: "/vault",
-    actionText: "Open Vault",
-  },
-  {
-    id: "notif-5",
-    title: "Exam Timetable & Planner",
-    message: "Track your scheduled exam deadlines and manage your daily study timetable hours.",
-    category: "quiz",
-    timestamp: "Yesterday",
-    read: true,
-    link: "/study-plan",
-    actionText: "Open Timetable",
-  },
 ];
 
 const CATEGORY_CONFIG = {
@@ -101,6 +83,30 @@ const CATEGORY_CONFIG = {
   },
 };
 
+function formatTimeAgo(dateStr?: string): string {
+  if (!dateStr) return "Just now";
+  try {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffSec = Math.floor((now.getTime() - d.getTime()) / 1000);
+    if (diffSec < 60) return "Just now";
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+    return `${Math.floor(diffSec / 86400)}d ago`;
+  } catch {
+    return "Recently";
+  }
+}
+
+function mapBackendType(typeStr?: string): "security" | "study" | "ai" | "quiz" | "vault" {
+  if (!typeStr) return "ai";
+  if (typeStr.includes("login") || typeStr.includes("security")) return "security";
+  if (typeStr.includes("study") || typeStr.includes("session")) return "study";
+  if (typeStr.includes("exam") || typeStr.includes("quiz")) return "quiz";
+  if (typeStr.includes("doc") || typeStr.includes("vault") || typeStr.includes("resource")) return "vault";
+  return "ai";
+}
+
 export function NotificationCenter() {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -108,21 +114,51 @@ export function NotificationCenter() {
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  // Load notifications from localStorage or fallback to default
-  useEffect(() => {
+  const fetchLiveNotifications = async () => {
     try {
+      // Trigger background check for due reminders
+      remindersApi.checkAndDispatch().catch(() => null);
+
+      const res = await notificationsApi.list();
+      if (res.data?.notifications && Array.isArray(res.data.notifications)) {
+        if (res.data.notifications.length > 0) {
+          const mapped: NotificationItem[] = res.data.notifications.map((n: any) => ({
+            id: String(n.id),
+            title: n.title,
+            message: n.message,
+            category: mapBackendType(n.notification_type),
+            timestamp: formatTimeAgo(n.created_at),
+            read: Boolean(n.is_read),
+            link: n.action_url || "/dashboard",
+            actionText: "View",
+          }));
+          setNotifications(mapped);
+          try {
+            localStorage.setItem("studyos-notifications", JSON.stringify(mapped));
+          } catch {}
+          return;
+        }
+      }
+      // Fallback if empty in backend
       const stored = localStorage.getItem("studyos-notifications");
       if (stored) {
         setNotifications(JSON.parse(stored));
       } else {
         setNotifications(DEFAULT_NOTIFICATIONS);
-        localStorage.setItem("studyos-notifications", JSON.stringify(DEFAULT_NOTIFICATIONS));
       }
     } catch {
-      setNotifications(DEFAULT_NOTIFICATIONS);
+      const stored = localStorage.getItem("studyos-notifications");
+      if (stored) {
+        try { setNotifications(JSON.parse(stored)); } catch {}
+      } else {
+        setNotifications(DEFAULT_NOTIFICATIONS);
+      }
     }
+  };
 
-    // Listen for custom notification trigger
+  useEffect(() => {
+    fetchLiveNotifications();
+
     const handleNewNotification = (e: Event) => {
       const customEvent = e as CustomEvent<NotificationItem>;
       if (customEvent.detail) {
@@ -180,25 +216,37 @@ export function NotificationCenter() {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
     const updated = notifications.map((n) => ({ ...n, read: true }));
     saveNotifications(updated);
+    try {
+      await notificationsApi.markAllRead();
+    } catch {}
   };
 
-  const markAsRead = (id: string) => {
+  const markAsRead = async (id: string) => {
     const updated = notifications.map((n) =>
       n.id === id ? { ...n, read: true } : n
     );
     saveNotifications(updated);
+    try {
+      await notificationsApi.markRead(id);
+    } catch {}
   };
 
-  const deleteNotification = (id: string) => {
+  const deleteNotification = async (id: string) => {
     const updated = notifications.filter((n) => n.id !== id);
     saveNotifications(updated);
+    try {
+      await notificationsApi.delete(id);
+    } catch {}
   };
 
   const clearAll = () => {
     saveNotifications([]);
+    notifications.forEach((n) => {
+      notificationsApi.delete(n.id).catch(() => null);
+    });
   };
 
   const filteredNotifications = notifications.filter((n) =>
@@ -213,10 +261,10 @@ export function NotificationCenter() {
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={clsx(
-          "btn-ghost relative transition-colors focus:outline-none",
+          "btn-ghost relative p-1.5 transition-colors focus:outline-none",
           isOpen
-            ? "text-emerald-500 bg-emerald-500/10"
-            : "text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:bg-slate-100 dark:hover:bg-white/5"
+            ? "text-slate-900 dark:text-white bg-slate-100 dark:bg-white/[0.06]"
+            : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
         )}
         title="Notifications"
         aria-label="View notifications"
@@ -224,8 +272,7 @@ export function NotificationCenter() {
       >
         <Bell className="w-4 h-4" />
         {unreadCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+          <span className="absolute top-1 right-1 flex h-2 w-2">
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
           </span>
         )}
@@ -235,27 +282,24 @@ export function NotificationCenter() {
       {isOpen && (
         <div
           ref={panelRef}
-          className="absolute right-0 mt-2.5 w-[340px] sm:w-[390px] max-h-[520px] bg-white dark:bg-[#0c101a] border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl shadow-black/20 dark:shadow-emerald-950/20 backdrop-blur-2xl z-50 flex flex-col overflow-hidden animate-fadeIn"
+          className="absolute right-0 mt-2 w-[340px] sm:w-[380px] max-h-[500px] bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-white/[0.1] rounded-xl shadow-xl shadow-black/10 dark:shadow-black/60 z-50 flex flex-col overflow-hidden animate-fadeIn"
           style={{ transformOrigin: "top right" }}
         >
           {/* Header */}
-          <div className="p-4 border-b border-slate-200 dark:border-white/[0.08] flex items-center justify-between bg-slate-50/70 dark:bg-white/[0.02]">
+          <div className="p-3.5 border-b border-slate-200 dark:border-white/[0.07] flex items-center justify-between bg-slate-50/70 dark:bg-white/[0.02]">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                <Bell className="w-4 h-4 text-emerald-500" />
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                <Bell className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <h3 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                   Notifications
                   {unreadCount > 0 && (
-                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-emerald-500 text-white leading-none">
-                      {unreadCount}
+                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                      {unreadCount} new
                     </span>
                   )}
                 </h3>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Updates, study streaks & AI activity
-                </p>
               </div>
             </div>
 
@@ -264,18 +308,18 @@ export function NotificationCenter() {
                 <button
                   type="button"
                   onClick={markAllAsRead}
-                  className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 p-1.5 rounded-lg hover:bg-emerald-500/10 transition-colors flex items-center gap-1"
+                  className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 hover:underline p-1 rounded transition-colors flex items-center gap-1"
                   title="Mark all as read"
                 >
                   <CheckCheck className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline text-[11px]">Read all</span>
+                  <span className="hidden sm:inline">Mark read</span>
                 </button>
               )}
               {notifications.length > 0 && (
                 <button
                   type="button"
                   onClick={clearAll}
-                  className="text-slate-400 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-500/10 transition-colors"
+                  className="text-slate-400 hover:text-rose-500 p-1 rounded transition-colors"
                   title="Clear all notifications"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -284,23 +328,23 @@ export function NotificationCenter() {
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-200/50 dark:hover:bg-white/5 transition-colors"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded transition-colors"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
           {/* Filter Pills */}
-          <div className="px-4 py-2 bg-slate-100/50 dark:bg-white/[0.01] border-b border-slate-200/70 dark:border-white/[0.05] flex items-center gap-2 text-xs">
+          <div className="px-3.5 py-1.5 bg-slate-50/50 dark:bg-white/[0.01] border-b border-slate-200/70 dark:border-white/[0.05] flex items-center gap-2 text-xs">
             <button
               type="button"
               onClick={() => setActiveFilter("all")}
               className={clsx(
-                "px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer",
+                "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer",
                 activeFilter === "all"
-                  ? "bg-emerald-500 text-white font-semibold shadow-xs"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  ? "bg-slate-200 dark:bg-white/10 text-slate-900 dark:text-white font-semibold"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               )}
             >
               All ({notifications.length})
@@ -309,10 +353,10 @@ export function NotificationCenter() {
               type="button"
               onClick={() => setActiveFilter("unread")}
               className={clsx(
-                "px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer",
+                "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer",
                 activeFilter === "unread"
-                  ? "bg-emerald-500 text-white font-semibold shadow-xs"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-semibold"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               )}
             >
               Unread ({unreadCount})
@@ -320,18 +364,18 @@ export function NotificationCenter() {
           </div>
 
           {/* Notification List */}
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-white/[0.04] max-h-[380px]">
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-white/[0.04] max-h-[360px]">
             {filteredNotifications.length === 0 ? (
-              <div className="py-12 px-6 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/5 flex items-center justify-center mx-auto mb-3 text-slate-400">
-                  <Bell className="w-6 h-6 stroke-[1.5]" />
+              <div className="py-10 px-6 text-center">
+                <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center mx-auto mb-2 text-slate-400">
+                  <Bell className="w-5 h-5 stroke-[1.5]" />
                 </div>
-                <div className="text-sm font-semibold text-slate-900 dark:text-white">
-                  {activeFilter === "unread" ? "No unread notifications" : "No notifications yet"}
+                <div className="text-xs font-semibold text-slate-900 dark:text-white">
+                  {activeFilter === "unread" ? "No unread notifications" : "No notifications"}
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-[240px] mx-auto">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 max-w-[220px] mx-auto">
                   {activeFilter === "unread"
-                    ? "You are all caught up on your study updates."
+                    ? "You are caught up with your study updates."
                     : "Activity updates, quiz results and study streaks will appear here."}
                 </p>
               </div>
@@ -345,37 +389,37 @@ export function NotificationCenter() {
                     key={notif.id}
                     onClick={() => markAsRead(notif.id)}
                     className={clsx(
-                      "p-3.5 flex gap-3 transition-colors relative group cursor-pointer",
+                      "p-3 flex gap-2.5 transition-colors relative group cursor-pointer",
                       notif.read
                         ? "bg-transparent hover:bg-slate-50/80 dark:hover:bg-white/[0.02]"
-                        : "bg-emerald-500/[0.04] dark:bg-emerald-500/[0.06] hover:bg-emerald-500/[0.08]"
+                        : "bg-emerald-500/[0.03] dark:bg-emerald-500/[0.05] hover:bg-emerald-500/[0.06]"
                     )}
                   >
                     {/* Category Icon */}
                     <div
                       className={clsx(
-                        "w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 border",
+                        "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 border",
                         config.color
                       )}
                     >
-                      <IconComponent className="w-4 h-4" />
+                      <IconComponent className="w-3.5 h-3.5" />
                     </div>
 
                     {/* Content */}
-                    <div className="flex-1 min-w-0 pr-5">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                    <div className="flex-1 min-w-0 pr-4">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="text-xs font-semibold text-slate-900 dark:text-white truncate">
                           {notif.title}
                         </span>
                         {!notif.read && (
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
                         )}
                       </div>
-                      <p className="text-[12px] text-slate-600 dark:text-slate-300 leading-snug">
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-normal">
                         {notif.message}
                       </p>
 
-                      <div className="flex items-center justify-between mt-2 text-[11px] text-slate-400">
+                      <div className="flex items-center justify-between mt-1.5 text-[10px] text-slate-400">
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" /> {notif.timestamp}
                         </span>
@@ -384,10 +428,10 @@ export function NotificationCenter() {
                           <Link
                             href={notif.link}
                             onClick={() => setIsOpen(false)}
-                            className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 font-semibold"
+                            className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:underline font-semibold"
                           >
                             <span>{notif.actionText || "View"}</span>
-                            <ExternalLink className="w-3 h-3" />
+                            <ExternalLink className="w-2.5 h-2.5" />
                           </Link>
                         )}
                       </div>
@@ -400,10 +444,10 @@ export function NotificationCenter() {
                         e.stopPropagation();
                         deleteNotification(notif.id);
                       }}
-                      className="absolute right-2.5 top-3.5 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 p-1 rounded-md transition-opacity"
+                      className="absolute right-2 top-2.5 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 p-1 rounded transition-opacity"
                       title="Dismiss"
                     >
-                      <X className="w-3.5 h-3.5" />
+                      <X className="w-3 h-3" />
                     </button>
                   </div>
                 );
@@ -412,16 +456,16 @@ export function NotificationCenter() {
           </div>
 
           {/* Footer */}
-          <div className="p-3 bg-slate-50 dark:bg-white/[0.02] border-t border-slate-200 dark:border-white/[0.08] text-center text-xs text-slate-500 dark:text-slate-400 flex items-center justify-between">
-            <span className="flex items-center gap-1.5 text-[11px]">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-500" /> StudyOS Real-time Hub
+          <div className="p-2.5 bg-slate-50 dark:bg-white/[0.02] border-t border-slate-200 dark:border-white/[0.07] text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-[10px]">
+              <Sparkles className="w-3 h-3 text-emerald-500" /> Notifications Hub
             </span>
             <Link
               href="/settings"
               onClick={() => setIsOpen(false)}
-              className="text-[11px] text-slate-500 dark:text-slate-400 hover:text-emerald-500 font-medium"
+              className="text-[10px] text-slate-500 dark:text-slate-400 hover:text-emerald-500"
             >
-              Preferences
+              Settings
             </Link>
           </div>
         </div>

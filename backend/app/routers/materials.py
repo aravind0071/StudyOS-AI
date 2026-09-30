@@ -6,13 +6,14 @@ import logging
 import mimetypes
 from pathlib import Path
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, status, Query
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
-from app.models.models import User, Material, MaterialType, ProcessingStatus
+from app.core.dependencies import get_current_user, get_current_user_flexible
+from app.models.models import User, Material, MaterialType, ProcessingStatus, MaterialChunk
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/materials", tags=["Materials"])
@@ -240,6 +241,12 @@ def get_material(
     if not material:
         raise HTTPException(status_code=404, detail="Material not found.")
 
+    has_file = bool(material.file_path and os.path.exists(material.file_path))
+    if not has_file and material.file_path:
+        # Check relative to backend dir
+        alt_p = Path(settings.BACKEND_DIR) / material.file_path
+        has_file = alt_p.exists()
+
     return {
         "id": str(material.id),
         "title": material.title,
@@ -251,7 +258,129 @@ def get_material(
         "page_count": material.page_count,
         "file_size_bytes": material.file_size_bytes,
         "source_url": material.source_url,
+        "has_file": has_file,
+        "file_url": f"/api/v1/materials/{material.id}/file" if has_file else material.source_url,
         "created_at": material.created_at.isoformat() if material.created_at else None,
+    }
+
+
+@router.get("/{material_id}/file")
+def get_material_file(
+    material_id: str,
+    token: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user_flexible),
+    db: Session = Depends(get_db),
+):
+    """
+    Stream or view the raw material file directly in the browser.
+    Supports inline view for PDFs, images, media, or download for office docs.
+    """
+    material = (
+        db.query(Material)
+        .filter(Material.id == material_id, Material.user_id == current_user.id)
+        .first()
+    )
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found.")
+
+    if not material.file_path:
+        if material.source_url:
+            return RedirectResponse(url=material.source_url)
+        raise HTTPException(status_code=404, detail="This material does not have an attached file.")
+
+    p = Path(material.file_path)
+    if not p.exists():
+        alt_p = Path(settings.BACKEND_DIR) / material.file_path
+        if alt_p.exists():
+            p = alt_p
+        else:
+            raise HTTPException(status_code=404, detail="Underlying file could not be found on server disk.")
+
+    ext = p.suffix.lower()
+    guessed_mime = mimetypes.guess_type(str(p))[0]
+    mime_fallbacks = {
+        ".pdf": "application/pdf",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ".ppt": "application/vnd.ms-powerpoint",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".doc": "application/msword",
+        ".mp3": "audio/mpeg",
+        ".wav": "audio/wav",
+        ".m4a": "audio/mp4",
+        ".mp4": "video/mp4",
+    }
+    media_type = guessed_mime or mime_fallbacks.get(ext, "application/octet-stream")
+
+    display_filename = material.title or p.name
+    if not display_filename.lower().endswith(ext):
+        display_filename = f"{display_filename}{ext}"
+
+    # Use inline so PDF / image / audio / video render natively in browser tab/modal
+    return FileResponse(
+        path=str(p),
+        media_type=media_type,
+        filename=display_filename,
+        content_disposition_type="inline",
+    )
+
+
+@router.get("/{material_id}/content")
+def get_material_content(
+    material_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Retrieve full extracted content chunks (slides/pages/sections)
+    so students can read what is inside the file directly in the app.
+    """
+    material = (
+        db.query(Material)
+        .filter(Material.id == material_id, Material.user_id == current_user.id)
+        .first()
+    )
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found.")
+
+    chunks = (
+        db.query(MaterialChunk)
+        .filter(MaterialChunk.material_id == material.id)
+        .order_by(MaterialChunk.chunk_index.asc())
+        .all()
+    )
+
+    has_file = bool(material.file_path and os.path.exists(material.file_path))
+    if not has_file and material.file_path:
+        has_file = (Path(settings.BACKEND_DIR) / material.file_path).exists()
+
+    return {
+        "id": str(material.id),
+        "title": material.title,
+        "type": material.material_type.value,
+        "subject": material.subject,
+        "course": material.course,
+        "status": material.processing_status.value,
+        "detected_topics": material.detected_topics,
+        "page_count": material.page_count or len(chunks),
+        "file_size_bytes": material.file_size_bytes,
+        "source_url": material.source_url,
+        "has_file": has_file,
+        "chunks": [
+            {
+                "id": str(c.id),
+                "chunk_index": c.chunk_index,
+                "page_number": c.page_number,
+                "section_title": c.section_title,
+                "content": c.content,
+                "timestamp_start": c.timestamp_start,
+                "timestamp_end": c.timestamp_end,
+            }
+            for c in chunks
+        ],
     }
 
 

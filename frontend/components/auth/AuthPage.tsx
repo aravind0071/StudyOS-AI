@@ -318,22 +318,18 @@ function OtpTimer({ totalSeconds, onExpire }: { totalSeconds: number; onExpire: 
   );
 }
 
-// ── Logo Header Component (Memoized at top-level to prevent unmounting/blinking) ──
 const Logo = memo(function Logo() {
   return (
-    <div className="text-center mb-7">
-      <div className="w-14 h-14 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-3.5 shadow-lg shadow-emerald-500/20 border border-emerald-400/20">
-        <Brain className="w-8 h-8 text-white" />
+    <div className="text-center mb-6">
+      <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-xs">
+        <Brain className="w-5 h-5 text-white" />
       </div>
-      <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-        StudyOS <span className="gradient-text">AI</span>
+      <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">
+        StudyOS AI
       </h1>
-      <p className="text-slate-500 dark:text-slate-400 text-xs mt-1 font-medium">Personal AI Learning Operating System</p>
-      
-      {/* Live IST Time & Date down under StudyOS AI */}
-      <div className="mt-3 flex justify-center">
-        <ISTClockBadge />
-      </div>
+      <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
+        Student Intelligence & AI Learning Workspace
+      </p>
     </div>
   );
 });
@@ -672,13 +668,9 @@ export default function AuthPage() {
         <ThemeToggle />
       </div>
 
-      {/* Background blobs */}
-      <div className="fixed top-1/4 left-1/4 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="fixed bottom-1/4 right-1/4 w-72 h-72 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="w-full max-w-md relative">
+      <div className={clsx("w-full transition-all duration-200", activeTab === "register" && step === "tabs" ? "max-w-xl" : "max-w-md")}>
         {/* Card */}
-        <div className="card-glass p-6 sm:p-8 animate-fadeIn shadow-2xl">
+        <div className="card p-6 sm:p-8 animate-fadeIn shadow-xl shadow-black/5 dark:shadow-black/50">
           {/* ── OTP Verification (Login / Registration) ─────────────────── */}
           {step === "otp" && (
             <>
@@ -909,26 +901,23 @@ export default function AuthPage() {
             <>
               <Logo />
 
-              {/* Tabs with explicit dividing line and premium segmented control */}
-              <div className="relative flex items-center p-1.5 rounded-2xl bg-slate-100/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-white/[0.12] shadow-inner mb-6 backdrop-blur-sm">
+              {/* Tabs with clean segmented control */}
+              <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-[#0c121e] border border-slate-200 dark:border-white/[0.08] mb-5">
                 {/* Sign In Button */}
                 <button
                   type="button"
                   id="tab-signin"
                   onClick={() => handleTabSwitch("signin")}
                   className={clsx(
-                    "flex-1 flex items-center justify-center gap-2 py-2.5 px-3 text-xs sm:text-sm font-semibold rounded-xl transition-all duration-200 focus:outline-none cursor-pointer",
+                    "flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs sm:text-sm font-semibold rounded-lg transition-colors focus:outline-none cursor-pointer",
                     activeTab === "signin"
-                      ? "bg-white dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shadow-sm border border-slate-200/90 dark:border-emerald-500/40"
-                      : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800/40 border border-transparent"
+                      ? "bg-white dark:bg-white/10 text-slate-900 dark:text-white shadow-xs"
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   )}
                 >
-                  <LogIn className="w-4 h-4 shrink-0" />
+                  <LogIn className="w-3.5 h-3.5 shrink-0" />
                   <span>Sign In</span>
                 </button>
-
-                {/* Visible Dividing Line */}
-                <div className="w-[1.5px] h-6 bg-slate-300 dark:bg-slate-700 mx-1.5 shrink-0 rounded-full" aria-hidden="true" />
 
                 {/* New Registration Button */}
                 <button
@@ -936,14 +925,14 @@ export default function AuthPage() {
                   id="tab-register"
                   onClick={() => handleTabSwitch("register")}
                   className={clsx(
-                    "flex-1 flex items-center justify-center gap-2 py-2.5 px-3 text-xs sm:text-sm font-semibold rounded-xl transition-all duration-200 focus:outline-none cursor-pointer",
+                    "flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs sm:text-sm font-semibold rounded-lg transition-colors focus:outline-none cursor-pointer",
                     activeTab === "register"
-                      ? "bg-white dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shadow-sm border border-slate-200/90 dark:border-emerald-500/40"
-                      : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800/40 border border-transparent"
+                      ? "bg-white dark:bg-white/10 text-slate-900 dark:text-white shadow-xs"
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   )}
                 >
-                  <UserPlus className="w-4 h-4 shrink-0" />
-                  <span>New Registration</span>
+                  <UserPlus className="w-3.5 h-3.5 shrink-0" />
+                  <span>New Account</span>
                 </button>
               </div>
 

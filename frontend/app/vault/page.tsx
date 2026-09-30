@@ -1,15 +1,17 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import {
   Upload, FileText, Video, Mic, Globe, Image as ImgIcon,
   X, CheckCircle, Clock, AlertCircle, Loader2, Plus, Link as LinkIcon,
-  Trash2, Filter, RefreshCw, ExternalLink, Sparkles
+  Trash2, Filter, RefreshCw, ExternalLink, Sparkles, BookOpen, Eye
 } from "lucide-react";
 import { materialsApi, getErrorMessage } from "@/lib/api";
 import { toast } from "sonner";
 import clsx from "clsx";
 import { useEffect } from "react";
+import FilePreviewModal, { PreviewItem } from "@/components/vault/FilePreviewModal";
 
 const TYPE_ICONS: Record<string, React.ElementType> = {
   pdf: FileText, docx: FileText, pptx: FileText,
@@ -52,6 +54,7 @@ export default function VaultPage() {
   const [urlTitle, setUrlTitle] = useState("");
   const [urlType, setUrlType] = useState("youtube");
   const [filter, setFilter] = useState("all");
+  const [previewItem, setPreviewItem] = useState<PreviewItem | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadMaterials = async () => {
@@ -205,15 +208,27 @@ export default function VaultPage() {
     <div className="space-y-6 animate-fadeIn">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
             <FileText className="w-5 h-5 text-emerald-500" /> Knowledge Vault
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm">{materials.length} material{materials.length !== 1 ? "s" : ""} · All processed by AI</p>
         </div>
-        <button onClick={() => setShowUrlForm(v => !v)}
-          className="btn-secondary flex items-center gap-2">
-          <LinkIcon className="w-4 h-4" /> Add URL
-        </button>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/subjects"
+            className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors flex items-center gap-2 border border-emerald-500/20"
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            Organize by Subject Units (1 to 5)
+          </Link>
+          <button
+            type="button"
+            onClick={() => setShowUrlForm(v => !v)}
+            className="btn-secondary flex items-center gap-2 text-xs"
+          >
+            <LinkIcon className="w-3.5 h-3.5" /> Add URL
+          </button>
+        </div>
       </div>
 
       {/* URL Form */}
@@ -404,10 +419,10 @@ export default function VaultPage() {
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
         className={clsx(
-          "border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 bg-white/60 dark:bg-slate-900/40 shadow-sm",
+          "border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors bg-white dark:bg-[#0c121e]",
           dragging
-            ? "border-emerald-500 bg-emerald-500/10"
-            : "border-slate-300 dark:border-slate-700 hover:border-emerald-500/60 hover:bg-emerald-500/5 dark:hover:bg-slate-800/60"
+            ? "border-emerald-500 bg-emerald-500/5"
+            : "border-slate-300 dark:border-white/10 hover:border-emerald-500/60"
         )}
       >
         <input
@@ -478,18 +493,43 @@ export default function VaultPage() {
             const Icon = TYPE_ICONS[m.type] || FileText;
             const colorCls = TYPE_COLORS[m.type] || "text-slate-400 bg-slate-700";
             return (
-              <div key={m.id} className="card-hover p-5 flex flex-col gap-3 group">
+              <div
+                key={m.id}
+                onClick={() => setPreviewItem({
+                  id: m.id,
+                  title: m.title,
+                  type: m.type,
+                  source: "vault",
+                  source_url: m.source_url,
+                  subject: m.subject,
+                  page_count: m.page_count,
+                  file_size_bytes: m.file_size_bytes,
+                  detected_topics: m.detected_topics,
+                })}
+                className="card-hover p-5 flex flex-col gap-3 group cursor-pointer hover:border-emerald-500/40 hover:shadow-lg transition-all"
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div className={`w-10 h-10 rounded-xl ${colorCls} flex items-center justify-center flex-shrink-0`}>
                     <Icon className="w-5 h-5" />
                   </div>
-                  <button onClick={() => handleDelete(m.id, m.title)}
-                    className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-all p-1">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                      <Eye className="w-3 h-3" /> View
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(m.id, m.title);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-all p-1"
+                      title="Delete material"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 <div>
-                  <div className="font-semibold text-slate-900 dark:text-white text-sm leading-snug mb-1">
+                  <div className="font-semibold text-slate-900 dark:text-white text-sm leading-snug mb-1 group-hover:text-emerald-500 transition-colors">
                     {m.title}
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
@@ -497,7 +537,10 @@ export default function VaultPage() {
                     {m.status === "failed" && (
                       <button
                         type="button"
-                        onClick={(e) => handleRetry(m.id, e)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRetry(m.id, e);
+                        }}
                         className="text-xs font-semibold px-2 py-0.5 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/30 flex items-center gap-1 transition-colors cursor-pointer"
                         title="Retry processing"
                       >
@@ -553,6 +596,12 @@ export default function VaultPage() {
           })}
         </div>
       )}
+
+      {/* File & Document Preview Modal */}
+      <FilePreviewModal
+        item={previewItem}
+        onClose={() => setPreviewItem(null)}
+      />
     </div>
   );
 }
