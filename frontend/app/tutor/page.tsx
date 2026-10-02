@@ -236,6 +236,9 @@ interface Message {
   sources?: any[];
   used_external?: boolean;
   explain_level?: string;
+  source_type?: string;
+  source_label?: string;
+  source_detail?: string;
 }
 
 interface ChatSessionItem {
@@ -256,7 +259,7 @@ function SourceCard({ source }: { source: any }) {
   const Icon = icons[source.material_type] || FileText;
 
   const handleClick = () => {
-    toast.info(`Citation source: "${source.material_title}"${source.page_number ? ` (Page ${source.page_number})` : ""}`);
+    toast.info(`Source: "${source.material_title}"${source.page_number ? ` (Page ${source.page_number})` : ""}`);
   };
 
   return (
@@ -268,22 +271,21 @@ function SourceCard({ source }: { source: any }) {
       <div className="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
         <Icon className="w-3 h-3" />
       </div>
-      <div className="min-w-0 max-w-[200px]">
+      <div className="min-w-0 max-w-[220px]">
         <div className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 truncate">
           {source.material_title}
         </div>
-        <div className="text-[9.5px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+        <div className="text-[9.5px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
           {source.page_number && source.page_number > 0 ? (
-            <span>Page {source.page_number}</span>
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400">Page {source.page_number}</span>
           ) : source.timestamp_start !== undefined && source.timestamp_start !== null ? (
             <span>
               {Math.floor(source.timestamp_start / 60)}:
               {String(Math.round(source.timestamp_start % 60)).padStart(2, "0")}
             </span>
           ) : (
-            <span>Course Material Section</span>
+            <span>Course Section</span>
           )}
-          <span className="text-emerald-500 font-medium">• Verified</span>
         </div>
       </div>
     </button>
@@ -482,18 +484,37 @@ function AssistantMessage({
           </div>
         </div>
 
-        {/* Citations Section */}
-        {msg.sources && msg.sources.length > 0 && (
-          <div className="p-2.5 bg-slate-50 dark:bg-[#121927] rounded-xl border border-slate-200 dark:border-white/[0.08]">
-            <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
-              <BookOpen className="w-3 h-3 text-emerald-500" />
-              Sources verified from your uploaded materials:
+        {/* Source Attribution Section Below Every Answer */}
+        {msg.sources && msg.sources.length > 0 ? (
+          <div className="p-2.5 bg-emerald-500/5 dark:bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+            <div className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 mb-1.5 flex items-center gap-1.5">
+              <BookOpen className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Source: <strong>Uploaded Notes</strong> (From your course materials)</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {msg.sources.map((s, i) => (
                 <SourceCard key={i} source={s} />
               ))}
             </div>
+          </div>
+        ) : (
+          <div className="p-2.5 bg-slate-50 dark:bg-[#121927] rounded-xl border border-slate-200 dark:border-white/[0.08] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0">
+                <GraduationCap className="w-3.5 h-3.5" />
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold text-slate-800 dark:text-slate-200">
+                  Source: <span className="text-indigo-600 dark:text-indigo-400 font-bold">{msg.source_label || "Standard University Curriculum"}</span>
+                </div>
+                <div className="text-[9.5px] text-slate-500 dark:text-slate-400">
+                  High-scoring semester exam answer synthesized for full marks
+                </div>
+              </div>
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium">
+              Academic Knowledge
+            </span>
           </div>
         )}
       </div>
@@ -613,14 +634,29 @@ export default function TutorPage() {
     try {
       setLoading(true);
       const { data } = await chatApi.getHistory(id);
-      const msgs: Message[] = (data || []).map((m: any) => ({
-        id: m.id || Date.now().toString(),
-        role: m.role,
-        content: m.content,
-        sources: m.sources,
-        explain_level: m.explain_level,
-        used_external: !m.sources || m.sources.length === 0,
-      }));
+      const msgs: Message[] = (data || []).map((m: any) => {
+        let source_label = undefined;
+        let source_detail = undefined;
+        if (m.sources && m.sources.length > 0) {
+          source_label = "Uploaded Notes";
+        } else if (m.content) {
+          const match = m.content.match(/📌\s*\*\*Source:\*\*\s*\*\*([^*]+)\*\*(.*)/);
+          if (match) {
+            source_label = match[1].trim();
+            source_detail = match[2].trim();
+          }
+        }
+        return {
+          id: m.id || Date.now().toString(),
+          role: m.role,
+          content: m.content,
+          sources: m.sources,
+          explain_level: m.explain_level,
+          used_external: !m.sources || m.sources.length === 0,
+          source_label: source_label || (!m.sources || m.sources.length === 0 ? "Standard University Curriculum" : "Uploaded Notes"),
+          source_detail: source_detail,
+        };
+      });
       setSessionId(id);
       setMessages(msgs);
       if (typeof window !== "undefined") {
@@ -862,6 +898,9 @@ export default function TutorPage() {
                     id: currentAssistantId,
                     content: streamedText.length > 0 ? streamedText : m.content,
                     sources: meta.sources !== undefined ? meta.sources : m.sources,
+                    source_type: meta.source_type !== undefined ? meta.source_type : m.source_type,
+                    source_label: meta.source_label !== undefined ? meta.source_label : m.source_label,
+                    source_detail: meta.source_detail !== undefined ? meta.source_detail : m.source_detail,
                     used_external:
                       meta.used_external_knowledge !== undefined
                         ? meta.used_external_knowledge
@@ -916,6 +955,9 @@ export default function TutorPage() {
                   id: data.message_id || currentAssistantId,
                   content: data.answer,
                   sources: data.sources,
+                  source_type: data.source_type,
+                  source_label: data.source_label,
+                  source_detail: data.source_detail,
                   used_external: data.used_external_knowledge,
                   explain_level: data.explain_level || explainLevel,
                 }

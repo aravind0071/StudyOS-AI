@@ -1,9 +1,7 @@
-"""Interview mode router."""
+"""Interview mode router with adaptive 10-stage questioning, duplicate rejection, and 5-dimensional scoring."""
 
 import logging
-import json
-import re
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -12,6 +10,11 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.models import User, InterviewSession, InterviewQuestion, DifficultyLevel
+from app.services.interview_engine import (
+    generate_interview_question,
+    evaluate_interview_answer,
+    STAGE_NAMES,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/interview", tags=["Interview Mode"])
@@ -40,171 +43,6 @@ class NextQuestionRequest(BaseModel):
     current_question_order: int
 
 
-FALLBACK_QUESTIONS_BY_TOPIC = {
-    "Python": [
-        "Explain the key differences between mutable and immutable data types in Python with practical examples.",
-        "How does Python manage memory internally (reference counting, cyclic garbage collection, and GIL)?",
-        "What are Python generators and decorators? How does the 'yield' keyword differ from 'return' under the hood?",
-        "Explain multiple inheritance and the C3 linearization (Method Resolution Order / MRO) algorithm in Python.",
-        "What is the Global Interpreter Lock (GIL) in CPython, and how do multi-threading and multi-processing compare?",
-        "How do context managers work in Python, and how would you implement a custom one using '__enter__' and '__exit__'?",
-        "Explain the difference between deepcopy and shallow copy in Python, and how they behave with nested structures.",
-        "What are Python metaclasses and dunder methods ('__new__' vs '__init__'), and when should you use them?",
-        "How does Python's asyncio event loop execute coroutines concurrently on a single thread?",
-        "How would you profile, identify, and fix a memory leak or CPU bottleneck in a high-throughput Python backend?"
-    ],
-    "Operating Systems": [
-        "Explain the difference between a process and a thread, and how process context switching operates.",
-        "What are the four necessary conditions for deadlocks, and how can the Coffman conditions be prevented or detected?",
-        "Explain virtual memory, demand paging, and the differences between page faults and segmentation faults.",
-        "Compare CPU scheduling algorithms: Round Robin, Multi-Level Feedback Queue, and Shortest Job First.",
-        "How do mutexes, semaphores, and spinlocks differ, and what is the priority inversion problem?",
-        "What is thrashing in operating systems, and how does the working set model resolve it?",
-        "Explain inter-process communication (IPC) mechanisms: shared memory, message queues, sockets, and pipes.",
-        "How do modern file systems implement journaling and inodes for crash consistency?",
-        "Explain how memory protection and user/kernel mode transitions (syscalls, interrupts, traps) are implemented.",
-        "How would you design a distributed lock service taking clock drift and network partitions into account?"
-    ],
-    "DBMS": [
-        "Explain ACID properties in relational databases and the mechanisms used to guarantee each of them.",
-        "What are database indexes (B-Tree vs Hash Index), and how do they impact read and write performance?",
-        "Walk through database normalization from 1NF to BCNF with a concrete relational schema example.",
-        "What are transaction isolation levels (Read Uncommitted, Read Committed, Repeatable Read, Serializable) and their trade-offs?",
-        "Explain the Two-Phase Locking (2PL) protocol and how it ensures serializability.",
-        "Compare SQL (relational) vs NoSQL (document, key-value, column-family) databases and when to choose each.",
-        "How does Write-Ahead Logging (WAL) ensure durability and atomic recovery in database engines?",
-        "Explain database sharding, replication (master-slave vs multi-master), and partition tolerance.",
-        "What are clustered vs non-clustered indexes, and how do composite indexes behave with prefix matching?",
-        "How would you diagnose and optimize a slow query involving multi-table joins on millions of rows?"
-    ],
-    "Data Structures & Algorithms": [
-        "Explain how a Hash Table handles hash collisions (chaining vs open addressing) and its worst-case complexity.",
-        "How does QuickSort work, why is its worst case O(n^2), and how can median-of-three pivot selection mitigate it?",
-        "Compare Breadth-First Search (BFS) and Depth-First Search (DFS) in graph traversal and their cycle detection use cases.",
-        "Explain Dijkstra's shortest path algorithm and how using a min-heap optimizes its time complexity.",
-        "What is Dynamic Programming? Explain the difference between top-down memoization and bottom-up tabulation.",
-        "How does a Red-Black Tree maintain self-balancing properties during insertions and deletions?",
-        "Explain the Trie data structure and its advantages for prefix matching and autocomplete engines.",
-        "What is the topological sort algorithm, and how is it used to resolve build dependencies in a DAG?",
-        "How do Disjoint Set Union (Union-Find) with path compression and rank optimization achieve nearly O(1) operations?",
-        "How would you find the median of an infinite data stream using two priority queues (min-heap and max-heap)?"
-    ],
-    "Computer Networks": [
-        "Walk through the TCP 3-way handshake and 4-way teardown processes with TCP packet flags.",
-        "Explain the differences between TCP and UDP, and why real-time streaming often prefers UDP.",
-        "What happens under the hood from the moment you type a URL into your browser until the web page renders?",
-        "Explain DNS resolution hierarchy (root, TLD, authoritative nameservers) and recursive vs iterative queries.",
-        "How does subnetting and CIDR notation work, and how does a router determine the next hop via routing tables?",
-        "Explain the OSI 7-layer model vs the TCP/IP 4-layer model and where common protocols operate.",
-        "What is HTTP/2 multiplexing and HTTP/3 QUIC, and how do they solve head-of-line blocking in HTTP/1.1?",
-        "How does NAT (Network Address Translation) and port forwarding enable private IP addresses to communicate on the Internet?",
-        "Explain SSL/TLS handshake, asymmetric vs symmetric encryption, and digital certificates.",
-        "How do CDN edge networks and anycast routing accelerate content delivery and mitigate DDoS attacks?"
-    ]
-}
-
-
-def _generate_interview_question(
-    topic: str,
-    question_order: int,
-    previous_questions: list[str],
-    difficulty: str,
-    project_desc: Optional[str] = None,
-) -> dict:
-    """Generate next interview question using LLM with progressive fallback."""
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=settings.OPENAI_API_KEY)
-
-        prev_q_text = "\n".join(f"- {q}" for q in previous_questions[-3:])
-        project_ctx = f"\nProject: {project_desc}" if project_desc else ""
-
-        prompt = f"""You are a technical interviewer conducting a {difficulty}-level interview on {topic}.{project_ctx}
-
-Previous questions asked:
-{prev_q_text if prev_q_text else "None yet"}
-
-Generate question #{question_order + 1} that:
-- Is {difficulty} difficulty
-- Progresses logically from previous questions
-- Tests deep understanding, not just memorization
-- For question 1-3: fundamentals; 4-6: intermediate; 7+: advanced/design
-
-Return JSON:
-{{"question": "Your question here?", "expected_points": ["point1", "point2", "point3"]}}"""
-
-        response = client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.5,
-            max_tokens=500,
-        )
-        content = response.choices[0].message.content.strip()
-        json_match = re.search(r'\{.*\}', content, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group())
-    except Exception as e:
-        logger.error(f"Interview question generation failed: {e}")
-
-    # Fallback to progressive curated questions
-    for key, q_list in FALLBACK_QUESTIONS_BY_TOPIC.items():
-        if key.lower() in topic.lower() or topic.lower() in key.lower():
-            idx = question_order % len(q_list)
-            return {"question": q_list[idx], "expected_points": []}
-
-    return {"question": f"Explain the core architectural principles and internal design of {topic}.", "expected_points": []}
-
-
-def _evaluate_answer(question: str, user_answer: str, expected_points: list[str], topic: str) -> dict:
-    """Evaluate interview answer using LLM."""
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=settings.OPENAI_API_KEY)
-
-        prompt = f"""Evaluate this interview answer for the topic: {topic}
-
-Question: {question}
-Expected key points: {', '.join(expected_points)}
-Candidate's answer: {user_answer}
-
-Rate on 0-100 scale:
-- Technical correctness (0-100)
-- Completeness (0-100)
-- Clarity (0-100)
-
-Return JSON:
-{{
-  "correctness_score": 75,
-  "depth_score": 60,
-  "clarity_score": 80,
-  "feedback": "Brief constructive feedback (2-3 sentences)",
-  "missing_points": ["point missed 1", "point missed 2"],
-  "follow_up_question": "A natural follow-up question?"
-}}"""
-
-        response = client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=600,
-        )
-        content = response.choices[0].message.content.strip()
-        json_match = re.search(r'\{.*\}', content, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group())
-    except Exception as e:
-        logger.error(f"Answer evaluation failed: {e}")
-
-    return {
-        "correctness_score": 50,
-        "depth_score": 50,
-        "clarity_score": 50,
-        "feedback": "Could not evaluate answer automatically.",
-        "missing_points": [],
-        "follow_up_question": None,
-    }
-
-
 @router.post("/start")
 def start_session(
     payload: StartSessionRequest,
@@ -220,13 +58,14 @@ def start_session(
     db.add(session)
     db.flush()
 
-    # Generate first question
-    q_data = _generate_interview_question(
+    # Generate first question (Stage 0: Basic Concept)
+    q_data = generate_interview_question(
         topic=payload.topic,
         question_order=0,
         previous_questions=[],
         difficulty="easy",
         project_desc=payload.project_description,
+        mode=payload.mode,
     )
 
     question = InterviewQuestion(
@@ -242,11 +81,13 @@ def start_session(
     return {
         "session_id": str(session.id),
         "topic": session.topic,
+        "mode": session.mode,
         "first_question": {
             "id": str(question.id),
             "question": question.question_text,
             "order": 0,
             "difficulty": "easy",
+            "stage": q_data.get("stage", STAGE_NAMES[0]),
         },
     }
 
@@ -273,38 +114,46 @@ def submit_answer(
     if not question:
         raise HTTPException(status_code=404, detail="Question not found.")
 
-    # Evaluate answer
-    evaluation = _evaluate_answer(
+    # Rigorous 5-dimensional evaluation
+    evaluation = evaluate_interview_answer(
         question=question.question_text,
         user_answer=payload.user_answer,
-        expected_points=[],
         topic=session.topic,
+        stage_idx=question.question_order,
     )
 
     question.user_answer = payload.user_answer
     question.ai_feedback = evaluation.get("feedback")
     question.correctness_score = evaluation.get("correctness_score")
+    question.relevance_score = evaluation.get("relevance_score")
     question.depth_score = evaluation.get("depth_score")
-    question.clarity_score = evaluation.get("clarity_score")
+    question.completeness_score = evaluation.get("completeness_score")
+    question.communication_score = evaluation.get("communication_score")
+    question.clarity_score = evaluation.get("communication_score")
+    question.overall_score = evaluation.get("overall_score")
     question.follow_up_question = evaluation.get("follow_up_question")
+    question.is_skipped = False
     session.total_questions = question.question_order + 1
 
     db.flush()
 
-    # Generate next question (if session not ended)
+    # Generate next question with real interviewer adaptability (if not at question 10)
     next_question = None
-    if question.question_order < 9:  # max 10 questions
-        prev_questions = [q.question_text for q in session.questions]
+    if question.question_order < 9:
+        prev_questions = [q.question_text for q in session.questions if q.question_text]
         next_q_order = question.question_order + 1
         difficulty = "easy" if next_q_order < 3 else "medium" if next_q_order < 7 else "hard"
         diff_map = {"easy": DifficultyLevel.EASY, "medium": DifficultyLevel.MEDIUM, "hard": DifficultyLevel.HARD}
 
-        next_q_data = _generate_interview_question(
+        next_q_data = generate_interview_question(
             topic=session.topic,
             question_order=next_q_order,
             previous_questions=prev_questions,
             difficulty=difficulty,
             project_desc=session.project_description,
+            mode=session.mode,
+            last_answer=payload.user_answer,
+            last_score=evaluation.get("overall_score"),
         )
         next_q = InterviewQuestion(
             session_id=session.id,
@@ -315,7 +164,13 @@ def submit_answer(
         )
         db.add(next_q)
         db.flush()
-        next_question = {"id": str(next_q.id), "question": next_q.question_text, "order": next_q_order, "difficulty": difficulty}
+        next_question = {
+            "id": str(next_q.id),
+            "question": next_q.question_text,
+            "order": next_q_order,
+            "difficulty": difficulty,
+            "stage": next_q_data.get("stage", STAGE_NAMES[next_q_order]),
+        }
     else:
         session.completed = True
 
@@ -324,9 +179,13 @@ def submit_answer(
     return {
         "feedback": evaluation.get("feedback"),
         "correctness_score": evaluation.get("correctness_score"),
+        "relevance_score": evaluation.get("relevance_score"),
         "depth_score": evaluation.get("depth_score"),
-        "clarity_score": evaluation.get("clarity_score"),
+        "completeness_score": evaluation.get("completeness_score"),
+        "communication_score": evaluation.get("communication_score"),
+        "overall_score": evaluation.get("overall_score"),
         "missing_points": evaluation.get("missing_points", []),
+        "follow_up_question": evaluation.get("follow_up_question"),
         "next_question": next_question,
         "session_complete": session.completed,
     }
@@ -354,28 +213,37 @@ def skip_question(
     if not question:
         raise HTTPException(status_code=404, detail="Question not found.")
 
+    # Mark explicitly as skipped
     question.user_answer = "[Candidate skipped question]"
     question.ai_feedback = "This question was skipped by the candidate."
-    question.correctness_score = 0
-    question.depth_score = 0
-    question.clarity_score = 0
+    question.correctness_score = 0.0
+    question.relevance_score = 0.0
+    question.depth_score = 0.0
+    question.completeness_score = 0.0
+    question.communication_score = 0.0
+    question.clarity_score = 0.0
+    question.overall_score = 0.0
+    question.is_skipped = True
     session.total_questions = question.question_order + 1
     db.flush()
 
     # Generate next question
     next_question = None
     if question.question_order < 9:
-        prev_questions = [q.question_text for q in session.questions]
+        prev_questions = [q.question_text for q in session.questions if q.question_text]
         next_q_order = question.question_order + 1
         difficulty = "easy" if next_q_order < 3 else "medium" if next_q_order < 7 else "hard"
         diff_map = {"easy": DifficultyLevel.EASY, "medium": DifficultyLevel.MEDIUM, "hard": DifficultyLevel.HARD}
 
-        next_q_data = _generate_interview_question(
+        next_q_data = generate_interview_question(
             topic=session.topic,
             question_order=next_q_order,
             previous_questions=prev_questions,
             difficulty=difficulty,
             project_desc=session.project_description,
+            mode=session.mode,
+            last_answer=None,
+            last_score=None,
         )
         next_q = InterviewQuestion(
             session_id=session.id,
@@ -386,7 +254,13 @@ def skip_question(
         )
         db.add(next_q)
         db.flush()
-        next_question = {"id": str(next_q.id), "question": next_q.question_text, "order": next_q_order, "difficulty": difficulty}
+        next_question = {
+            "id": str(next_q.id),
+            "question": next_q.question_text,
+            "order": next_q_order,
+            "difficulty": difficulty,
+            "stage": next_q_data.get("stage", STAGE_NAMES[next_q_order]),
+        }
     else:
         session.completed = True
 
@@ -394,11 +268,15 @@ def skip_question(
 
     return {
         "message": "Question skipped.",
-        "feedback": "Question was skipped.",
-        "correctness_score": 0,
-        "depth_score": 0,
-        "clarity_score": 0,
-        "missing_points": ["Candidate chose to skip this topic."],
+        "feedback": "This question was skipped.",
+        "correctness_score": 0.0,
+        "relevance_score": 0.0,
+        "depth_score": 0.0,
+        "completeness_score": 0.0,
+        "communication_score": 0.0,
+        "overall_score": 0.0,
+        "missing_points": ["Question was skipped by candidate."],
+        "is_skipped": True,
         "next_question": next_question,
         "session_complete": session.completed,
     }
@@ -422,7 +300,7 @@ def get_or_generate_next_question(
     if next_order >= 10:
         return {"next_question": None, "session_complete": True}
 
-    # Check if this question order already exists in database
+    # Check if question already exists in DB
     existing_q = (
         db.query(InterviewQuestion)
         .filter(InterviewQuestion.session_id == session.id, InterviewQuestion.question_order == next_order)
@@ -430,27 +308,30 @@ def get_or_generate_next_question(
     )
     if existing_q:
         diff_str = "easy" if existing_q.difficulty == DifficultyLevel.EASY else "medium" if existing_q.difficulty == DifficultyLevel.MEDIUM else "hard"
+        stage_name = STAGE_NAMES[min(next_order, 9)]
         return {
             "next_question": {
                 "id": str(existing_q.id),
                 "question": existing_q.question_text,
                 "order": existing_q.question_order,
                 "difficulty": diff_str,
+                "stage": stage_name,
             },
             "session_complete": False,
         }
 
     # Generate new question
-    prev_questions = [q.question_text for q in session.questions]
+    prev_questions = [q.question_text for q in session.questions if q.question_text]
     difficulty = "easy" if next_order < 3 else "medium" if next_order < 7 else "hard"
     diff_map = {"easy": DifficultyLevel.EASY, "medium": DifficultyLevel.MEDIUM, "hard": DifficultyLevel.HARD}
 
-    next_q_data = _generate_interview_question(
+    next_q_data = generate_interview_question(
         topic=session.topic,
         question_order=next_order,
         previous_questions=prev_questions,
         difficulty=difficulty,
         project_desc=session.project_description,
+        mode=session.mode,
     )
     new_q = InterviewQuestion(
         session_id=session.id,
@@ -468,8 +349,92 @@ def get_or_generate_next_question(
             "question": new_q.question_text,
             "order": new_q.question_order,
             "difficulty": difficulty,
+            "stage": next_q_data.get("stage", STAGE_NAMES[next_order]),
         },
         "session_complete": False,
+    }
+
+
+@router.get("/summary/{session_id}")
+def get_session_summary(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Returns comprehensive analytics for an interview session."""
+    session = (
+        db.query(InterviewSession)
+        .filter(InterviewSession.id == session_id, InterviewSession.user_id == current_user.id)
+        .first()
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    questions = (
+        db.query(InterviewQuestion)
+        .filter(InterviewQuestion.session_id == session.id)
+        .order_by(InterviewQuestion.question_order.asc())
+        .all()
+    )
+
+    submitted_questions = [
+        q for q in questions
+        if not getattr(q, "is_skipped", False)
+        and q.user_answer
+        and q.user_answer != "[Candidate skipped question]"
+    ]
+    skipped_count = sum(1 for q in questions if getattr(q, "is_skipped", False) or q.user_answer == "[Candidate skipped question]")
+    submitted_count = len(submitted_questions)
+
+    # Calculate average ONLY from submitted answers
+    if submitted_count > 0:
+        avg_overall = round(sum(q.overall_score or q.correctness_score or 0 for q in submitted_questions) / submitted_count)
+        avg_correctness = round(sum(q.correctness_score or 0 for q in submitted_questions) / submitted_count)
+        avg_relevance = round(sum(q.relevance_score or q.correctness_score or 0 for q in submitted_questions) / submitted_count)
+        avg_depth = round(sum(q.depth_score or 0 for q in submitted_questions) / submitted_count)
+        avg_completeness = round(sum(q.completeness_score or q.depth_score or 0 for q in submitted_questions) / submitted_count)
+        avg_communication = round(sum(q.communication_score or q.clarity_score or 0 for q in submitted_questions) / submitted_count)
+    else:
+        avg_overall = 0
+        avg_correctness = 0
+        avg_relevance = 0
+        avg_depth = 0
+        avg_completeness = 0
+        avg_communication = 0
+
+    return {
+        "session_id": str(session.id),
+        "topic": session.topic,
+        "mode": session.mode,
+        "completed": session.completed,
+        "total_questions_presented": len(questions),
+        "submitted_count": submitted_count,
+        "skipped_count": skipped_count,
+        "average_overall_score": avg_overall,
+        "scores_breakdown": {
+            "correctness": avg_correctness,
+            "relevance": avg_relevance,
+            "depth": avg_depth,
+            "completeness": avg_completeness,
+            "communication": avg_communication,
+        },
+        "questions": [
+            {
+                "id": str(q.id),
+                "order": q.question_order,
+                "question": q.question_text,
+                "user_answer": q.user_answer,
+                "ai_feedback": q.ai_feedback,
+                "is_skipped": getattr(q, "is_skipped", False) or q.user_answer == "[Candidate skipped question]",
+                "correctness_score": q.correctness_score,
+                "relevance_score": getattr(q, "relevance_score", q.correctness_score),
+                "depth_score": q.depth_score,
+                "completeness_score": getattr(q, "completeness_score", q.depth_score),
+                "communication_score": getattr(q, "communication_score", q.clarity_score),
+                "overall_score": getattr(q, "overall_score", q.correctness_score),
+            }
+            for q in questions
+        ]
     }
 
 

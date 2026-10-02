@@ -29,6 +29,9 @@ class ChatResponse(BaseModel):
     answer: str
     sources: list
     used_external_knowledge: bool
+    source_type: Optional[str] = None
+    source_label: Optional[str] = None
+    source_detail: Optional[str] = None
 
 
 @router.post("/", response_model=ChatResponse)
@@ -110,6 +113,9 @@ def chat(
         answer=rag_result["answer"],
         sources=rag_result["sources"],
         used_external_knowledge=rag_result["used_external_knowledge"],
+        source_type=rag_result.get("source_type"),
+        source_label=rag_result.get("source_label"),
+        source_detail=rag_result.get("source_detail"),
     )
 
 
@@ -195,6 +201,9 @@ async def chat_stream(
             "message_id": str(assistant_msg.id),
             "sources": rag_result["sources"],
             "used_external_knowledge": rag_result["used_external_knowledge"],
+            "source_type": rag_result.get("source_type"),
+            "source_label": rag_result.get("source_label"),
+            "source_detail": rag_result.get("source_detail"),
         }
         yield f"data: {json.dumps(start_data)}\n\n"
 
@@ -206,6 +215,9 @@ async def chat_stream(
             "type": "done",
             "session_id": str(session.id),
             "message_id": str(assistant_msg.id),
+            "source_type": rag_result.get("source_type"),
+            "source_label": rag_result.get("source_label"),
+            "source_detail": rag_result.get("source_detail"),
         }
         yield f"data: {json.dumps(done_data)}\n\n"
 

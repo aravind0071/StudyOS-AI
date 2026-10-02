@@ -412,8 +412,13 @@ class InterviewQuestion(Base):
     user_answer = Column(Text, nullable=True)
     ai_feedback = Column(Text, nullable=True)
     correctness_score = Column(Float, nullable=True)   # 0-100
+    relevance_score = Column(Float, nullable=True)
     depth_score = Column(Float, nullable=True)
-    clarity_score = Column(Float, nullable=True)
+    completeness_score = Column(Float, nullable=True)
+    communication_score = Column(Float, nullable=True)
+    clarity_score = Column(Float, nullable=True)       # Backwards compatibility
+    overall_score = Column(Float, nullable=True)
+    is_skipped = Column(Boolean, default=False)
     follow_up_question = Column(Text, nullable=True)
     question_order = Column(Integer, nullable=False)
     difficulty = Column(SAEnum(DifficultyLevel), default=DifficultyLevel.MEDIUM)

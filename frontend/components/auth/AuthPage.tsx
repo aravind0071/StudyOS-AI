@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, memo } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -299,20 +299,58 @@ function OtpInput({ value, onChange }: { value: string; onChange: (v: string) =>
 }
 
 // ── OTP Timer ─────────────────────────────────────────────────────────────────
-function OtpTimer({ totalSeconds, onExpire }: { totalSeconds: number; onExpire: () => void }) {
-  const [seconds, setSeconds] = useState(totalSeconds);
+function OtpTimer({ expiresAt, onExpire }: { expiresAt: number; onExpire?: () => void }) {
+  const calculateRemaining = useCallback(() => {
+    if (!expiresAt) return 0;
+    return Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+  }, [expiresAt]);
+
+  const [seconds, setSeconds] = useState(calculateRemaining);
+  const expiredNotifiedRef = useRef(false);
+
   useEffect(() => {
-    setSeconds(totalSeconds);
-  }, [totalSeconds]);
-  useEffect(() => {
-    if (seconds <= 0) { onExpire(); return; }
-    const t = setTimeout(() => setSeconds(s => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [seconds, onExpire]);
+    expiredNotifiedRef.current = false;
+    const tick = () => {
+      const remaining = calculateRemaining();
+      setSeconds(remaining);
+      if (remaining <= 0 && !expiredNotifiedRef.current) {
+        expiredNotifiedRef.current = true;
+        onExpire?.();
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+
+    // Sync immediately when returning to tab from email or another app
+    const handleSync = () => {
+      if (!document.hidden) {
+        tick();
+      }
+    };
+    document.addEventListener("visibilitychange", handleSync);
+    window.addEventListener("focus", handleSync);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleSync);
+      window.removeEventListener("focus", handleSync);
+    };
+  }, [expiresAt, calculateRemaining, onExpire]);
+
   const m = Math.floor(seconds / 60).toString().padStart(2, "0");
   const s = (seconds % 60).toString().padStart(2, "0");
+
+  if (seconds <= 0) {
+    return (
+      <span className="font-mono font-bold text-rose-500">
+        00:00 (Expired)
+      </span>
+    );
+  }
+
   return (
-    <span className={clsx("font-mono font-bold", seconds <= 60 ? "text-red-500" : "text-emerald-600 dark:text-emerald-400")}>
+    <span className={clsx("font-mono font-bold", seconds <= 60 ? "text-amber-500" : "text-emerald-600 dark:text-emerald-400")}>
       {m}:{s}
     </span>
   );
@@ -353,7 +391,8 @@ export default function AuthPage() {
   const [pendingUserId, setPendingUserId] = useState("");
   const [pendingEmail, setPendingEmail] = useState("");
   const [pendingPurpose, setPendingPurpose] = useState<"registration" | "login" | "password_reset">("login");
-  const [otpTimerKey, setOtpTimerKey] = useState(0);
+  const [otpExpiresAt, setOtpExpiresAt] = useState<number>(0);
+  const [resendAvailableAt, setResendAvailableAt] = useState<number>(0);
   const [resendCooldown, setResendCooldown] = useState(0);
 
   // Login form
@@ -408,13 +447,14 @@ export default function AuthPage() {
       setPendingUserId(pending.userId);
       setPendingEmail(pending.email);
       setPendingPurpose(pending.purpose);
+      const expAt = pending.expiresAt || (Date.now() + 600 * 1000);
+      setOtpExpiresAt(expAt);
       if (pending.step === "forgot-otp") {
         setStep("forgot-otp");
       } else {
         setStep("otp");
       }
-      setResendCooldown(30);
-      setOtpTimerKey(k => k + 1);
+      setResendAvailableAt(Date.now() + 30 * 1000);
     }
   }, []);
 
@@ -423,12 +463,28 @@ export default function AuthPage() {
     setPwValidation(validatePassword(reg.password, reg.confirm_password));
   }, [reg.password, reg.confirm_password]);
 
-  // Resend cooldown timer
+  // Wall-clock synchronized resend cooldown timer
   useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const t = setTimeout(() => setResendCooldown(c => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [resendCooldown]);
+    const updateCooldown = () => {
+      const remaining = Math.max(0, Math.ceil((resendAvailableAt - Date.now()) / 1000));
+      setResendCooldown(remaining);
+    };
+    updateCooldown();
+    if (resendAvailableAt <= Date.now()) return;
+
+    const interval = setInterval(updateCooldown, 1000);
+    const handleSync = () => {
+      if (!document.hidden) updateCooldown();
+    };
+    document.addEventListener("visibilitychange", handleSync);
+    window.addEventListener("focus", handleSync);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleSync);
+      window.removeEventListener("focus", handleSync);
+    };
+  }, [resendAvailableAt]);
 
   // Switch tab cleanly and clear validation errors
   const handleTabSwitch = (tab: ActiveTab) => {
@@ -490,7 +546,10 @@ export default function AuthPage() {
       setPendingEmail(data.email);
       const purpose = data.is_registration_verification ? "registration" : "login";
       setPendingPurpose(purpose);
-      savePendingAuth({ userId: data.user_id, email: data.email, purpose, step: "otp" });
+      const expInSec = data.expires_in_seconds || 600;
+      const expAt = Date.now() + expInSec * 1000;
+      setOtpExpiresAt(expAt);
+      savePendingAuth({ userId: data.user_id, email: data.email, purpose, step: "otp", expiresAt: expAt });
       setOtp("");
       setDemoOtp(data.demo_otp || null);
       if (data.is_registration_verification) {
@@ -498,8 +557,7 @@ export default function AuthPage() {
       } else {
         toast.success("Security verification code sent to your email.");
       }
-      setOtpTimerKey(k => k + 1);
-      setResendCooldown(60);
+      setResendAvailableAt(Date.now() + 60 * 1000);
       setStep("otp");
     } catch (err) {
       toast.error(getErrorMessage(err));
@@ -541,12 +599,14 @@ export default function AuthPage() {
       setPendingUserId(data.user_id);
       setPendingEmail(data.email);
       setPendingPurpose("registration");
-      savePendingAuth({ userId: data.user_id, email: data.email, purpose: "registration", step: "otp" });
+      const expInSec = data.expires_in_seconds || 600;
+      const expAt = Date.now() + expInSec * 1000;
+      setOtpExpiresAt(expAt);
+      savePendingAuth({ userId: data.user_id, email: data.email, purpose: "registration", step: "otp", expiresAt: expAt });
       setOtp("");
       setDemoOtp(data.demo_otp || null);
       toast.success("Account created! Verification code sent to your email.");
-      setOtpTimerKey(k => k + 1);
-      setResendCooldown(60);
+      setResendAvailableAt(Date.now() + 60 * 1000);
       setStep("otp");
     } catch (err) {
       toast.error(getErrorMessage(err));
@@ -598,8 +658,11 @@ export default function AuthPage() {
     setLoading(true);
     try {
       const { data } = await authApi.resendOtp(pendingUserId, pendingPurpose);
-      setOtpTimerKey(k => k + 1);
-      setResendCooldown(60);
+      const expInSec = data.expires_in_seconds || 600;
+      const expAt = Date.now() + expInSec * 1000;
+      setOtpExpiresAt(expAt);
+      savePendingAuth({ userId: pendingUserId, email: pendingEmail, purpose: pendingPurpose, step, expiresAt: expAt });
+      setResendAvailableAt(Date.now() + 60 * 1000);
       setOtp("");
       setDemoOtp(data.demo_otp || null);
       toast.success("New verification code sent to your email.");
@@ -622,11 +685,13 @@ export default function AuthPage() {
         setPendingUserId(data.user_id);
         setPendingEmail(forgotEmail);
         setPendingPurpose("password_reset");
-        savePendingAuth({ userId: data.user_id, email: forgotEmail, purpose: "password_reset", step: "forgot-otp" });
+        const expInSec = data.expires_in_seconds || 600;
+        const expAt = Date.now() + expInSec * 1000;
+        setOtpExpiresAt(expAt);
+        savePendingAuth({ userId: data.user_id, email: forgotEmail, purpose: "password_reset", step: "forgot-otp", expiresAt: expAt });
         setOtp("");
         setDemoOtp(data.demo_otp || null);
-        setOtpTimerKey(k => k + 1);
-        setResendCooldown(60);
+        setResendAvailableAt(Date.now() + 60 * 1000);
         setStep("forgot-otp");
       }
     } catch (err) {
@@ -712,8 +777,7 @@ export default function AuthPage() {
                 <div className="text-center text-sm text-slate-600 dark:text-slate-400">
                   Code expires in:{" "}
                   <OtpTimer
-                    key={otpTimerKey}
-                    totalSeconds={300}
+                    expiresAt={otpExpiresAt}
                     onExpire={() => toast.warning("Code has expired. Please request a new one.")}
                   />
                 </div>
@@ -818,8 +882,7 @@ export default function AuthPage() {
                 <div className="text-center text-sm text-slate-600 dark:text-slate-400">
                   Expires in:{" "}
                   <OtpTimer
-                    key={otpTimerKey}
-                    totalSeconds={300}
+                    expiresAt={otpExpiresAt}
                     onExpire={() => toast.warning("Reset code has expired. Please request a new one.")}
                   />
                 </div>

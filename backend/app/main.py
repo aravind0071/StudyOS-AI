@@ -27,9 +27,30 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Create all database tables on startup."""
+    """Create all database tables on startup and apply lightweight migrations."""
     logger.info("StudyOS AI starting up...")
     Base.metadata.create_all(bind=engine)
+
+    # Safe migration for interview_questions scoring and skip columns
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            result = conn.execute(text("PRAGMA table_info(interview_questions)"))
+            cols = [row[1] for row in result.fetchall()]
+            for col_name, col_type in [
+                ("relevance_score", "FLOAT"),
+                ("completeness_score", "FLOAT"),
+                ("communication_score", "FLOAT"),
+                ("overall_score", "FLOAT"),
+                ("is_skipped", "BOOLEAN DEFAULT 0"),
+            ]:
+                if col_name not in cols:
+                    conn.execute(text(f"ALTER TABLE interview_questions ADD COLUMN {col_name} {col_type}"))
+                    conn.commit()
+                    logger.info(f"Added column {col_name} to interview_questions table.")
+    except Exception as e:
+        logger.warning(f"Database column migration note: {e}")
+
     logger.info("Database tables initialized.")
     yield
     logger.info("StudyOS AI shutting down.")

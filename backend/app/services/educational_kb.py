@@ -15,23 +15,38 @@ Strictly adheres to:
 
 import re
 from typing import Optional, List, Dict, Any
+from app.services.query_understanding import extract_topic_and_expansions
+
+
+def check_query_explicit_marks(query: str) -> Optional[int]:
+    """
+    Detect if the student query explicitly requests a specific marks format.
+    Matches queries like '2 marks', '2m', 'give 2 answer', 'give me 2 answer', 'for 2',
+    '5 marks', '5m', '10 marks', '10m', '16 marks', etc.
+    Returns 2, 5, 10, or None if no specific marks was explicitly requested in the query.
+    """
+    q = query.lower()
+
+    # 1. Explicit 2 marks check (handles 'give 2 marks answer', 'give 2 answer', '2m', 'for 2', 'viva note', etc.)
+    if re.search(r"\b(2\s*marks?|two\s*marks?|2m|2\s*answers?|short\s*note|brief\s*def|define\s+briefly|viva\s*note|for\s+2\b|in\s+2\b)\b", q):
+        return 2
+
+    # 2. Explicit 5 marks check
+    if re.search(r"\b(5\s*marks?|five\s*marks?|5m|5\s*answers?|medium\s*answer|for\s+5\b|in\s+5\b)\b", q) and not re.search(r"\b(10|16)\b", q):
+        return 5
+
+    # 3. Explicit 10 marks / 16 marks check
+    if re.search(r"\b(10\s*marks?|ten\s*marks?|16\s*marks?|10m|16m|10\s*answers?|16\s*answers?|in\s*detail|indetail|comprehensive|full\s*problem|worked\s*problem|master\s*answer|for\s+10\b|in\s+10\b)\b", q):
+        return 10
+
+    return None
 
 
 def detect_marks(query: str, explain_level: str = "btech_student") -> int:
     """Detect if the student requested an answer for 2 marks, 5 marks, or 10 marks."""
-    q = query.lower()
-
-    # Explicit 2 marks check
-    if re.search(r"\b(2\s*marks?|two\s*marks?|2m|short\s*note|brief\s*def|define\s+briefly|viva\s*note)\b", q):
-        return 2
-
-    # Explicit 5 marks check
-    if re.search(r"\b(5\s*marks?|five\s*marks?|5m|medium|explain\s+simply)\b", q) and not re.search(r"\b(10|16)\b", q):
-        return 5
-
-    # Explicit 10 marks / 16 marks / detailed check
-    if re.search(r"\b(10\s*marks?|ten\s*marks?|16\s*marks?|10m|16m|in\s*detail|indetail|comprehensive|full\s*problem|worked\s*problem|master\s*answer)\b", q):
-        return 10
+    explicit = check_query_explicit_marks(query)
+    if explicit is not None:
+        return explicit
 
     # Fallback based on explain_level parameter
     lvl = (explain_level or "").lower()
@@ -42,7 +57,7 @@ def detect_marks(query: str, explain_level: str = "btech_student") -> int:
     elif lvl == "interview":
         return 5
 
-    # Check for normal indicator: if query is a direct "What is X" without marks, default to normal (marks=None/5)
+    # Default to 5 marks (never 10 marks)
     return 5
 
 
@@ -281,7 +296,7 @@ def build_grounded_response(
     diagram = synthesize_material_diagram(topic_lower)
 
     # ── 2 MARKS EXAM ANSWER ──────────────────────────────────────────────────
-    if is_explicit_marks and marks == 2:
+    if marks == 2:
         ans = (
             f"### 🎯 {topic} — 2-Marks University Exam Answer\n"
             f"*Primary Source: **{material_title}***\n\n"
@@ -299,53 +314,11 @@ def build_grounded_response(
         if easy_trick:
             ans += f"\n> 💡 **Easy Memory Formula (from your notes):** `{easy_trick}`\n\n"
 
-        ans += f"> **Exam Tip:** Keep the definition under 3 lines and write the memory formula or keyword to secure full 2 marks."
-        return ans
-
-    # ── 5 MARKS EXAM ANSWER ──────────────────────────────────────────────────
-    elif is_explicit_marks and marks == 5:
-        ans = (
-            f"### 📝 {topic} — 5-Marks Structured Concept Explanation\n"
-            f"*Primary Source: **{material_title}***\n\n"
-            f"#### 1. Definition\n"
-            f"**{topic}** is defined in your course notes as:\n"
-            f"> {def_text}\n\n"
-            f"#### 2. Simple Explanation\n"
-        )
-        if easy_trick:
-            ans += f"In simple terms: **{easy_trick}**. "
-        ans += (
-            f"It ensures that operations proceed predictably without data corruption, "
-            f"loss of synchronization, or resource overload.\n\n"
-            f"#### 3. Important Points from Your Material\n"
-        )
-        if bullets:
-            for b in bullets[:4]:
-                ans += f"- {b}\n"
-        else:
-            ans += (
-                f"- **Protocol Layer:** Operates as a foundational mechanism in standard systems.\n"
-                f"- **Data Integrity:** Guarantees proper synchronization between communicating entities.\n"
-                f"- **Fault Handling:** Uses deterministic acknowledgment, timeouts, or validation checks.\n"
-            )
-
-        if code_samples:
-            ans += f"\n#### 4. Code / Working Example\n```python\n" + "\n".join(code_samples[:2]) + "\n```\n"
-
-        if diagram:
-            ans += f"\n#### 5. Working Diagram\n{diagram}\n"
-
-        if easy_trick:
-            ans += f"\n> 💡 **Quick Revision Trick:** `{easy_trick}`\n\n"
-
-        ans += (
-            f"#### 6. Short Conclusion\n"
-            f"**{topic}** provides the essential protocol foundation tested in semester exams. Understanding its core flow and key rules is crucial for scoring top marks."
-        )
+        ans += f"> 💡 **Exam Tip:** Keep the definition under 3 lines and write the memory formula or keyword to secure full 2 marks."
         return ans
 
     # ── 10 MARKS EXAM ANSWER ─────────────────────────────────────────────────
-    elif is_explicit_marks and marks == 10:
+    elif marks in (10, 16):
         ans = (
             f"# {topic} — 10-Marks Comprehensive University Solution\n\n"
             f"*Synthesized from your uploaded study material: **{material_title}***\n\n"
@@ -446,21 +419,17 @@ def build_grounded_response(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def get_not_in_materials_disclaimer(topic: str = "") -> str:
-    """Explicit, anti-hallucination disclaimer when a topic is absent from uploaded study notes."""
-    clean = topic.strip().title() if topic else "This Topic"
-    return (
-        f"> ⚠️ **Topic Not Found in Your Uploaded Materials**\n"
-        f"> The required material for **\"{clean}\"** was not found in the study materials or files you uploaded.\n"
-        f"> *To get answers directly from your specific syllabus notes, please upload the relevant lecture notes, slides, or PDF to the Knowledge Vault.*\n"
-        f">\n"
-        f"> Below is the complete, high-scoring semester exam answer based on the **Standard University Curriculum**:\n\n"
-    )
+    """
+    Never refuse or output 'Topic Not Found'.
+    Seamlessly deliver the complete, high-scoring semester exam answer based on the Standard University Curriculum.
+    """
+    return ""
 
 
-CURRICULUM_DISCLAIMER = get_not_in_materials_disclaimer("This Topic")
+CURRICULUM_DISCLAIMER = ""
 
 
-def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks: bool) -> Optional[str]:
+def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks: bool, query_info: Optional[Dict[str, Any]] = None) -> Optional[str]:
     """
     Provides highly accurate, technically rigorous curriculum solutions for core university subjects.
     Returns None if topic is not in the curated curriculum bank (triggering universal academic synthesizer).
@@ -468,9 +437,13 @@ def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks
     t = clean_topic.lower()
     disclaimer = get_not_in_materials_disclaimer(clean_topic)
 
+    expanded = set(query_info.get("expanded_terms", [])) if query_info else set()
+    tokens = set(query_info.get("tokens", [])) if query_info else set(t.split())
+    stems = set(query_info.get("stemmed_tokens", [])) if query_info else set()
+
     # ── 1. TWO-PHASE LOCKING (2PL) ───────────────────────────────────────────
-    if "two phase" in t or "2pl" in t or "locking protocol" in t:
-        if is_explicit_marks and marks == 2:
+    if any(k in t or k in expanded for k in ["two phase", "2pl", "locking protocol", "two-phase"]) or ("phase" in tokens and "locking" in tokens):
+        if marks == 2:
             return (
                 disclaimer +
                 "### 🎯 Two-Phase Locking (2PL) Protocol — 2-Marks University Answer\n\n"
@@ -482,35 +455,7 @@ def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks
                 "- **Shrinking Phase:** Transaction may release locks, but cannot acquire any new lock.\n\n"
                 "> 💡 **Exam Tip:** State clearly: *\"Once a transaction releases a lock, it can never acquire another lock.\"*"
             )
-        elif is_explicit_marks and marks == 5:
-            return (
-                disclaimer +
-                "### 📝 Two-Phase Locking (2PL) Protocol — 5-Marks Structured Explanation\n\n"
-                "#### 1. Definition\n"
-                "**Two-Phase Locking (2PL)** is a concurrency control mechanism that ensures conflict serializability in database transactions through two distinct phases: Growing Phase and Shrinking Phase.\n\n"
-                "#### 2. Simple Explanation\n"
-                "Imagine checking out books from a library: you first collect all the books you need onto your desk (Growing Phase). "
-                "Once you return your first book to the shelf, library policy forbids you from picking up any more books for that session (Shrinking Phase). "
-                "This prevents intermediate uncommitted reads by other users.\n\n"
-                "#### 3. The Two Phases & Lock Point\n"
-                "1. **Growing Phase:** Locks are acquired; no locks are released.\n"
-                "2. **Lock Point:** Point where the transaction holds the maximum number of locks.\n"
-                "3. **Shrinking Phase:** Locks are released; no new locks can be acquired.\n\n"
-                "#### 4. Architecture Diagram\n"
-                "```mermaid\n"
-                "graph LR\n"
-                "    A[Growing Phase: Locks Acquired] --> B((Lock Point))\n"
-                "    B --> C[Shrinking Phase: Locks Released]\n"
-                "    C --> D[Transaction Complete]\n"
-                "```\n\n"
-                "#### 5. Types of 2PL\n"
-                "- **Basic 2PL:** Standard two phases; vulnerable to cascading aborts.\n"
-                "- **Strict 2PL:** Holds all Exclusive (X) locks until commit/abort (avoids cascading aborts).\n"
-                "- **Rigorous 2PL:** Holds both Shared (S) and Exclusive (X) locks until commit/abort.\n\n"
-                "#### 6. Conclusion\n"
-                "2PL guarantees serializability but does **not** prevent deadlocks (which must be handled via wait-for graphs or timeouts)."
-            )
-        else:
+        elif marks in (10, 16):
             return (
                 disclaimer +
                 "# Two-Phase Locking (2PL) Protocol — 10-Marks Comprehensive Solution\n\n"
@@ -522,7 +467,7 @@ def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks
                 "- **Growing (Expanding) Phase:** The transaction acquires locks (Shared $S$ or Exclusive $X$) as needed. Lock upgrades ($S \\to X$) are allowed. No locks may be released.\n"
                 "- **Lock Point:** The exact timestamp at which $T_i$ obtains its final required lock. The serializability order of transactions in a schedule is completely determined by the chronological order of their lock points.\n"
                 "- **Shrinking (Contracting) Phase:** The transaction releases locks. Lock downgrades ($X \\to S$) are allowed. Absolutely no new locks can be acquired once the first lock is released.\n\n"
-                "## 3. Working Diagram\n"
+                "## 3. Working Diagram (Simple to Draw in Exam)\n"
                 "```mermaid\n"
                 "graph TD\n"
                 "    subgraph Growing Phase\n"
@@ -555,69 +500,49 @@ def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks
                 "## 7. Semester Exam Conclusion\n"
                 "In semester exams, highlight the distinction between **Strict 2PL** and **Rigorous 2PL**, and emphasize that 2PL guarantees serializability but requires separate deadlock detection mechanisms."
             )
+        else:
+            return (
+                disclaimer +
+                "### 📝 Two-Phase Locking (2PL) Protocol — 5-Marks Structured Explanation\n\n"
+                "#### 1. Definition\n"
+                "**Two-Phase Locking (2PL)** is a concurrency control mechanism that ensures conflict serializability in database transactions through two distinct phases: Growing Phase and Shrinking Phase.\n\n"
+                "#### 2. Simple Explanation\n"
+                "Imagine checking out books from a library: you first collect all the books you need onto your desk (Growing Phase). "
+                "Once you return your first book to the shelf, library policy forbids you from picking up any more books for that session (Shrinking Phase). "
+                "This prevents intermediate uncommitted reads by other users.\n\n"
+                "#### 3. The Two Phases & Lock Point\n"
+                "1. **Growing Phase:** Locks are acquired; no locks are released.\n"
+                "2. **Lock Point:** Point where the transaction holds the maximum number of locks.\n"
+                "3. **Shrinking Phase:** Locks are released; no new locks can be acquired.\n\n"
+                "#### 4. Architecture Diagram\n"
+                "```mermaid\n"
+                "graph LR\n"
+                "    A[Growing Phase: Locks Acquired] --> B((Lock Point))\n"
+                "    B --> C[Shrinking Phase: Locks Released]\n"
+                "    C --> D[Transaction Complete]\n"
+                "```\n\n"
+                "#### 5. Types of 2PL\n"
+                "- **Basic 2PL:** Standard two phases; vulnerable to cascading aborts.\n"
+                "- **Strict 2PL:** Holds all Exclusive (X) locks until commit/abort (avoids cascading aborts).\n"
+                "- **Rigorous 2PL:** Holds both Shared (S) and Exclusive (X) locks until commit/abort.\n\n"
+                "#### 6. Conclusion\n"
+                "2PL guarantees serializability but does **not** prevent deadlocks (which must be handled via wait-for graphs or timeouts)."
+            )
 
     # ── 2. SYSTEM CALLS (OPERATING SYSTEMS) ──────────────────────────────────
-    elif "system call" in t or "systemcall" in t or "syscall" in t:
-        if is_explicit_marks and marks == 2:
+    elif any(k in t or k in expanded for k in ["system call", "system calls", "syscall", "syscalls", "systemcall"]) or ("system" in tokens and ("call" in tokens or "calls" in tokens or "call" in stems)):
+        if marks == 2:
             return (
                 disclaimer +
                 "### 🎯 System Calls — 2-Marks University Exam Answer\n\n"
                 "#### 1. Core Definition (1 Mark)\n"
-                "A **System Call** is the programmatic interface provided by an Operating System that allows a user-level program to request privileged kernel services (such as hardware access, file I/O, and process creation).\n\n"
+                "A **System Call** is the programmatic interface provided by an Operating System that allows a user-level application to request privileged kernel services (such as hardware access, file I/O, and process creation).\n\n"
                 "#### 2. Key Mechanism & Examples (1 Mark)\n"
                 "- **Mode Switch:** Triggers a software interrupt / hardware **Trap** instruction that switches the CPU from **User Mode** (mode bit = 1) to **Kernel Mode** (mode bit = 0).\n"
                 "- **Standard Examples:** `fork()` (process creation), `read()` / `write()` (file I/O), `wait()` (synchronization).\n\n"
                 "> 💡 **Exam Tip:** State the dual-mode transition: *\"User Mode $\\to$ Trap instruction $\\to$ Kernel Mode $\\to$ Return to User Mode.\"*"
             )
-        elif is_explicit_marks and marks == 5:
-            return (
-                disclaimer +
-                "### 📝 System Calls in Operating Systems — 5-Marks Structured Explanation\n\n"
-                "#### 1. Definition\n"
-                "A **System Call** is a programmatic interface that enables user-space applications to request protected services and privileged hardware resources directly from the Operating System kernel.\n\n"
-                "#### 2. Why System Calls are Essential (Dual-Mode Operation)\n"
-                "Modern CPUs operate in two modes to prevent user programs from damaging the OS or hardware:\n"
-                "1. **User Mode (Bit = 1):** Restricted execution environment without direct hardware access.\n"
-                "2. **Kernel / Privileged Mode (Bit = 0):** Unrestricted access to hardware and physical memory.\n"
-                "System calls are the **only gateway** for a user program to cross into Kernel Mode.\n\n"
-                "#### 3. Step-by-Step Execution Sequence\n"
-                "1. User program invokes a standard library wrapper (e.g. C library `printf()` calls `write()`).\n"
-                "2. The library loads the system call number into a CPU register and executes a **Trap / Software Interrupt**.\n"
-                "3. The CPU switches to **Kernel Mode** and consults the **System Call Interface / Table**.\n"
-                "4. The kernel executes the corresponding Service Routine (handler).\n"
-                "5. Upon completion, the CPU restores the user process state and switches back to **User Mode**.\n\n"
-                "#### 4. Architecture Diagram\n"
-                "```mermaid\n"
-                "sequenceDiagram\n"
-                "    autonumber\n"
-                "    actor App as User Program (User Mode)\n"
-                "    participant Lib as C Library (libc)\n"
-                "    participant Trap as Trap / Syscall Handler\n"
-                "    participant Kernel as OS Kernel (Kernel Mode)\n"
-                "    participant HW as Hardware / Storage\n"
-                "\n"
-                "    App->>Lib: Call open() / write()\n"
-                "    Lib->>Trap: Load Syscall ID into Register & Execute Trap\n"
-                "    Note over Trap: CPU switches from User Mode (1) to Kernel Mode (0)\n"
-                "    Trap->>Kernel: Lookup System Call Table[ID]\n"
-                "    Kernel->>HW: Perform Privileged Hardware I/O\n"
-                "    HW-->>Kernel: Hardware Return / Data\n"
-                "    Kernel-->>Lib: Return Result Code\n"
-                "    Note over Lib: CPU switches back to User Mode (1)\n"
-                "    Lib-->>App: Return to User Application\n"
-                "```\n\n"
-                "#### 5. Types of System Calls with Standard Examples\n\n"
-                "| Category | Purpose | POSIX / Linux Examples | Windows Win32 Equivalent |\n"
-                "| :--- | :--- | :--- | :--- |\n"
-                "| **Process Control** | Create, load, and terminate processes | `fork()`, `exec()`, `wait()`, `exit()` | `CreateProcess()`, `ExitProcess()` |\n"
-                "| **File Management** | Create, read, write, and close files | `open()`, `read()`, `write()`, `close()` | `CreateFile()`, `ReadFile()` |\n"
-                "| **Device Management**| Request, read, and write devices | `ioctl()`, `read()`, `write()` | `SetConsoleMode()` |\n"
-                "| **Information** | System data, time, PID | `getpid()`, `alarm()`, `sleep()` | `GetCurrentProcessId()` |\n"
-                "| **Communication** | Inter-process communication | `pipe()`, `shmget()`, `socket()` | `CreatePipe()` |\n\n"
-                "#### 6. Short Conclusion\n"
-                "System calls guarantee system stability and security by enforcing hardware-mediated boundaries between untrusted user code and the privileged operating system kernel."
-            )
-        else:
+        elif marks in (10, 16):
             return (
                 disclaimer +
                 "# System Calls & Operating System Kernel Architecture — 10-Marks Master Solution\n\n"
@@ -636,32 +561,18 @@ def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks
                 "4. **Table Dispatch:** The kernel indexes the **System Call Dispatch Table** using the syscall number and dispatches the corresponding kernel function (`sys_read()`).\n"
                 "5. **Execution & Privilege Checks:** Kernel validates memory pointers, permissions, and file descriptors before performing device I/O.\n"
                 "6. **Return to User Mode:** Kernel puts return status into `%rax`, executes `sysret` / `iret`, which restores CPU mode bit to User Mode ($1$) and resumes user process execution.\n\n"
-                "## 4. Architectural Sequence Diagram\n"
+                "## 4. Simple Exam Architecture Diagram (Easy to Draw in Exam)\n"
                 "```mermaid\n"
-                "sequenceDiagram\n"
-                "    autonumber\n"
-                "    actor App as User Program (User Space)\n"
-                "    participant Lib as Standard C Library\n"
-                "    participant CPU as CPU Mode Bit Register\n"
-                "    participant Table as System Call Dispatch Table\n"
-                "    participant OS as Kernel Service Routine (Ring 0)\n"
-                "    participant HW as Hardware Controller / Disk\n"
-                "\n"
-                "    App->>Lib: Call read(fd, buf, size)\n"
-                "    Lib->>CPU: Load Syscall # into RAX, Issue 'syscall' trap\n"
-                "    activate CPU\n"
-                "    Note over CPU: Hardware changes Mode Bit: 1 (User) -> 0 (Kernel)\n"
-                "    CPU->>Table: Vector to entry point in Syscall Table\n"
-                "    Table->>OS: Invoke sys_read(fd, buf, size)\n"
-                "    activate OS\n"
-                "    OS->>OS: Validate pointers & security ACLs\n"
-                "    OS->>HW: Transfer blocks via DMA / Device Driver\n"
-                "    HW-->>OS: I/O Complete Interrupt\n"
-                "    OS-->>CPU: Write return bytes count to RAX\n"
-                "    deactivate OS\n"
-                "    CPU->>Lib: Execute 'sysret' -> Mode Bit: 0 -> 1 (User)\n"
-                "    deactivate CPU\n"
-                "    Lib-->>App: Return number of bytes read\n"
+                "graph LR\n"
+                "    subgraph User Space [User Mode: Mode Bit = 1]\n"
+                "        A[User Program / Application] --> B[Standard C Library: printf / read]\n"
+                "    end\n"
+                "    B -->|1. Hardware Trap / Syscall| C\n"
+                "    subgraph Kernel Space [Kernel Mode: Mode Bit = 0]\n"
+                "        C[Syscall Table / Dispatcher] --> D[OS Kernel Service Routine]\n"
+                "        D --> E[Hardware / CPU / Storage]\n"
+                "    end\n"
+                "    E -.->|2. Return Value & Mode Switch 0 to 1| A\n"
                 "```\n\n"
                 "## 5. Parameter Passing Methods in System Calls\n"
                 "Three general methods are used by operating systems to pass parameters to the kernel:\n\n"
@@ -682,10 +593,51 @@ def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks
                 "## 7. Semester Exam Conclusion\n"
                 "In university examinations, always illustrate the **Dual-Mode switching diagram**, state the **Trap mechanism**, and detail the **Three parameter passing techniques** along with POSIX vs Windows API comparisons to secure maximum 10 marks."
             )
+        else:
+            return (
+                disclaimer +
+                "### 📝 System Calls in Operating Systems — 5-Marks Structured Explanation\n\n"
+                "#### 1. Definition\n"
+                "A **System Call** is a programmatic interface that enables user-space applications to request protected services and privileged hardware resources directly from the Operating System kernel.\n\n"
+                "#### 2. Why System Calls are Essential (Dual-Mode Operation)\n"
+                "Modern CPUs operate in two modes to prevent user programs from damaging the OS or hardware:\n"
+                "1. **User Mode (Bit = 1):** Restricted execution environment without direct hardware access.\n"
+                "2. **Kernel / Privileged Mode (Bit = 0):** Unrestricted access to hardware and physical memory.\n"
+                "System calls are the **only gateway** for a user program to cross into Kernel Mode.\n\n"
+                "#### 3. Step-by-Step Execution Sequence\n"
+                "1. User program invokes a standard library wrapper (e.g. C library `printf()` calls `write()`).\n"
+                "2. The library loads the system call number into a CPU register and executes a **Trap / Software Interrupt**.\n"
+                "3. The CPU switches to **Kernel Mode** and consults the **System Call Interface / Table**.\n"
+                "4. The kernel executes the corresponding Service Routine (handler).\n"
+                "5. Upon completion, the CPU restores the user process state and switches back to **User Mode**.\n\n"
+                "#### 4. Architecture Diagram (Easy to Draw in Exam)\n"
+                "```mermaid\n"
+                "graph LR\n"
+                "    subgraph User Space [User Mode: Mode Bit = 1]\n"
+                "        A[User Program / Application] --> B[Standard C Library: printf / read]\n"
+                "    end\n"
+                "    B -->|1. Hardware Trap / Syscall| C\n"
+                "    subgraph Kernel Space [Kernel Mode: Mode Bit = 0]\n"
+                "        C[Syscall Table / Dispatcher] --> D[OS Kernel Service Routine]\n"
+                "        D --> E[Hardware / CPU / Storage]\n"
+                "    end\n"
+                "    E -.->|2. Return Value & Mode Switch 0 to 1| A\n"
+                "```\n\n"
+                "#### 5. Types of System Calls with Standard Examples\n\n"
+                "| Category | Purpose | POSIX / Linux Examples | Windows Win32 Equivalent |\n"
+                "| :--- | :--- | :--- | :--- |\n"
+                "| **Process Control** | Create, load, and terminate processes | `fork()`, `exec()`, `wait()`, `exit()` | `CreateProcess()`, `ExitProcess()` |\n"
+                "| **File Management** | Create, read, write, and close files | `open()`, `read()`, `write()`, `close()` | `CreateFile()`, `ReadFile()` |\n"
+                "| **Device Management**| Request, read, and write devices | `ioctl()`, `read()`, `write()` | `SetConsoleMode()` |\n"
+                "| **Information** | System data, time, PID | `getpid()`, `alarm()`, `sleep()` | `GetCurrentProcessId()` |\n"
+                "| **Communication** | Inter-process communication | `pipe()`, `shmget()`, `socket()` | `CreatePipe()` |\n\n"
+                "#### 6. Short Conclusion\n"
+                "System calls guarantee system stability and security by enforcing hardware-mediated boundaries between untrusted user code and the privileged operating system kernel."
+            )
 
     # ── 3. QUICKSORT ALGORITHM ───────────────────────────────────────────────
-    elif "quicksort" in t or "quick sort" in t:
-        if is_explicit_marks and marks == 2:
+    elif any(k in t or k in expanded for k in ["quicksort", "quick sort", "qsort"]):
+        if marks == 2:
             return (
                 disclaimer +
                 "### 🎯 QuickSort Algorithm — 2-Marks University Answer\n\n"
@@ -697,42 +649,7 @@ def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks
                 "- **Auxiliary Space:** $O(\\log n)$ recursion stack space.\n\n"
                 "> 💡 **Exam Tip:** Always state the recurrence relation: $T(n) = T(k) + T(n - k - 1) + O(n)$."
             )
-        elif is_explicit_marks and marks == 5:
-            return (
-                disclaimer +
-                "### 📝 QuickSort Algorithm — 5-Marks Structured Explanation\n\n"
-                "#### 1. Definition\n"
-                "**QuickSort** is a divide-and-conquer sorting algorithm that selects a pivot element and rearranges the array such that all elements smaller than the pivot are on its left, and all larger elements are on its right.\n\n"
-                "#### 2. The 3 Divide-and-Conquer Steps\n"
-                "1. **Pivot Selection:** Pick an element (first, last, median-of-three, or random).\n"
-                "2. **Partitioning:** Rearrange elements so elements $\\le \\text{pivot}$ are on the left and $> \\text{pivot}$ are on the right. Pivot reaches its final sorted index.\n"
-                "3. **Recursive Sort:** Recursively apply QuickSort to the left and right subarrays.\n\n"
-                "#### 3. Partitioning Flowchart\n"
-                "```mermaid\n"
-                "graph TD\n"
-                "    A[Array: 10, 80, 30, 90, 40, 50, 70] --> B[Choose Pivot: 70]\n"
-                "    B --> C[Lomuto / Hoare Partition]\n"
-                "    C --> D[Subarray Left <= 70: 10, 30, 40, 50]\n"
-                "    C --> E[Pivot 70 in Final Position]\n"
-                "    C --> F[Subarray Right > 70: 80, 90]\n"
-                "    D --> G[Recursive QuickSort Left]\n"
-                "    F --> H[Recursive QuickSort Right]\n"
-                "```\n\n"
-                "#### 4. Python Implementation\n"
-                "```python\n"
-                "def quicksort(arr):\n"
-                "    if len(arr) <= 1:\n"
-                "        return arr\n"
-                "    pivot = arr[len(arr) // 2]\n"
-                "    left = [x for x in arr if x < pivot]\n"
-                "    middle = [x for x in arr if x == pivot]\n"
-                "    right = [x for x in arr if x > pivot]\n"
-                "    return quicksort(left) + middle + quicksort(right)\n"
-                "```\n\n"
-                "#### 5. Exam Takeaway\n"
-                "- Average: $O(n \\log n)$, Worst: $O(n^2)$. In-place and cache-friendly."
-            )
-        else:
+        elif marks in (10, 16):
             return (
                 disclaimer +
                 "# QuickSort Algorithm — 10-Marks Master Solution\n\n"
@@ -783,10 +700,45 @@ def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks
                 "## 7. Semester Exam Conclusion\n"
                 "Always write the Lomuto partitioning code, state the recurrence tree depth ($\\log n$), and mention Randomized QuickSort to score full 10 marks."
             )
+        else:
+            return (
+                disclaimer +
+                "### 📝 QuickSort Algorithm — 5-Marks Structured Explanation\n\n"
+                "#### 1. Definition\n"
+                "**QuickSort** is a divide-and-conquer sorting algorithm that selects a pivot element and rearranges the array such that all elements smaller than the pivot are on its left, and all larger elements are on its right.\n\n"
+                "#### 2. The 3 Divide-and-Conquer Steps\n"
+                "1. **Pivot Selection:** Pick an element (first, last, median-of-three, or random).\n"
+                "2. **Partitioning:** Rearrange elements so elements $\\le \\text{pivot}$ are on the left and $> \\text{pivot}$ are on the right. Pivot reaches its final sorted index.\n"
+                "3. **Recursive Sort:** Recursively apply QuickSort to the left and right subarrays.\n\n"
+                "#### 3. Partitioning Flowchart\n"
+                "```mermaid\n"
+                "graph TD\n"
+                "    A[Array: 10, 80, 30, 90, 40, 50, 70] --> B[Choose Pivot: 70]\n"
+                "    B --> C[Lomuto / Hoare Partition]\n"
+                "    C --> D[Subarray Left <= 70: 10, 30, 40, 50]\n"
+                "    C --> E[Pivot 70 in Final Position]\n"
+                "    C --> F[Subarray Right > 70: 80, 90]\n"
+                "    D --> G[Recursive QuickSort Left]\n"
+                "    F --> H[Recursive QuickSort Right]\n"
+                "```\n\n"
+                "#### 4. Python Implementation\n"
+                "```python\n"
+                "def quicksort(arr):\n"
+                "    if len(arr) <= 1:\n"
+                "        return arr\n"
+                "    pivot = arr[len(arr) // 2]\n"
+                "    left = [x for x in arr if x < pivot]\n"
+                "    middle = [x for x in arr if x == pivot]\n"
+                "    right = [x for x in arr if x > pivot]\n"
+                "    return quicksort(left) + middle + quicksort(right)\n"
+                "```\n\n"
+                "#### 5. Exam Takeaway\n"
+                "- Average: $O(n \\log n)$, Worst: $O(n^2)$. In-place and cache-friendly."
+            )
 
     # ── 4. DEADLOCK & BANKER'S ALGORITHM ─────────────────────────────────────
-    elif "banker" in t or "deadlock avoidance" in t or "deadlock" in t:
-        if is_explicit_marks and marks == 2:
+    elif any(k in t or k in expanded for k in ["banker", "bankers", "deadlock avoidance", "deadlock", "deadlocks"]):
+        if marks == 2:
             return (
                 disclaimer +
                 "### 🎯 Deadlock & Coffman Conditions — 2-Marks University Answer\n\n"
@@ -799,32 +751,7 @@ def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks
                 "4. **Circular Wait:** A closed chain of processes exists where $P_0$ waits for $P_1$, $P_1$ waits for $P_2 \\dots P_n$ waits for $P_0$.\n\n"
                 "> 💡 **Exam Tip:** Deadlock occurs if and only if **all 4 conditions** hold simultaneously."
             )
-        elif is_explicit_marks and marks == 5:
-            return (
-                disclaimer +
-                "### 📝 Banker's Algorithm (Deadlock Avoidance) — 5-Marks Explanation\n\n"
-                "#### 1. Definition & Intuition\n"
-                "**Banker's Algorithm** is a deadlock avoidance algorithm formulated by Edsger Dijkstra. "
-                "Like a bank manager who never allocates cash unless all customer credit lines can be settled in some order, the OS only grants resource requests if the resulting state is **safe**.\n\n"
-                "#### 2. Core Data Structures\n"
-                "- $\\text{Available}[m]$: Available instances of each resource type.\n"
-                "- $\\text{Max}[n][m]$: Maximum demand of each process.\n"
-                "- $\\text{Allocation}[n][m]$: Currently allocated resources.\n"
-                "- $\\text{Need}[n][m] = \\text{Max}[n][m] - \\text{Allocation}[n][m]$: Remaining resource need.\n\n"
-                "#### 3. Safety Algorithm Flow\n"
-                "```mermaid\n"
-                "graph TD\n"
-                "    A[Initialize: Work = Available, Finish = False for all processes] --> B{Find process Pi: Finish i == False and Need i <= Work}\n"
-                "    B -- Found --> C[Work = Work + Allocation i, Finish i = True]\n"
-                "    C --> B\n"
-                "    B -- None Found --> D{Are all Finish i == True?}\n"
-                "    D -- Yes --> E[State is SAFE: No Deadlock]\n"
-                "    D -- No --> F[State is UNSAFE: Deadlock Possible]\n"
-                "```\n\n"
-                "#### 4. Exam Takeaway\n"
-                "- **Safe State:** A sequence $\\langle P_1, P_2, \\dots, P_n \\rangle$ exists where each process can finish."
-            )
-        else:
+        elif marks in (10, 16):
             return (
                 disclaimer +
                 "# Banker's Algorithm & Deadlock Management — 10-Marks Master Solution\n\n"
@@ -868,10 +795,35 @@ def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks
                 "## 6. Semester Exam Conclusion\n"
                 "Writing the full Need matrix and the Step-by-Step Work update trace is mandatory for full marks in this standard 10-mark question."
             )
+        else:
+            return (
+                disclaimer +
+                "### 📝 Banker's Algorithm (Deadlock Avoidance) — 5-Marks Explanation\n\n"
+                "#### 1. Definition & Intuition\n"
+                "**Banker's Algorithm** is a deadlock avoidance algorithm formulated by Edsger Dijkstra. "
+                "Like a bank manager who never allocates cash unless all customer credit lines can be settled in some order, the OS only grants resource requests if the resulting state is **safe**.\n\n"
+                "#### 2. Core Data Structures\n"
+                "- $\\text{Available}[m]$: Available instances of each resource type.\n"
+                "- $\\text{Max}[n][m]$: Maximum demand of each process.\n"
+                "- $\\text{Allocation}[n][m]$: Currently allocated resources.\n"
+                "- $\\text{Need}[n][m] = \\text{Max}[n][m] - \\text{Allocation}[n][m]$: Remaining resource need.\n\n"
+                "#### 3. Safety Algorithm Flow\n"
+                "```mermaid\n"
+                "graph TD\n"
+                "    A[Initialize: Work = Available, Finish = False for all processes] --> B{Find process Pi: Finish i == False and Need i <= Work}\n"
+                "    B -- Found --> C[Work = Work + Allocation i, Finish i = True]\n"
+                "    C --> B\n"
+                "    B -- None Found --> D{Are all Finish i == True?}\n"
+                "    D -- Yes --> E[State is SAFE: No Deadlock]\n"
+                "    D -- No --> F[State is UNSAFE: Deadlock Possible]\n"
+                "```\n\n"
+                "#### 4. Exam Takeaway\n"
+                "- **Safe State:** A sequence $\\langle P_1, P_2, \\dots, P_n \\rangle$ exists where each process can finish."
+            )
 
     # ── 5. PROCESS VS THREAD ─────────────────────────────────────────────────
-    elif "process vs thread" in t or "process and thread" in t or "difference between process and thread" in t:
-        if is_explicit_marks and marks == 2:
+    elif any(k in t or k in expanded for k in ["process vs thread", "process and thread", "difference between process and thread"]) or ("process" in tokens and "thread" in tokens):
+        if marks == 2:
             return (
                 disclaimer +
                 "### 🎯 Process vs Thread — 2-Marks University Exam Answer\n\n"
@@ -883,38 +835,7 @@ def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks
                 "- **Context Switching:** Switching between threads is much faster than switching between processes.\n\n"
                 "> 💡 **Exam Tip:** Remember: *\"A process contains one or more threads; threads share memory but have private stacks and registers.\"*"
             )
-        elif is_explicit_marks and marks == 5:
-            return (
-                disclaimer +
-                "### 📝 Process vs Thread — 5-Marks Structured Comparison\n\n"
-                "#### 1. Definition\n"
-                "A **Process** is an active execution instance of a program managed via a **Process Control Block (PCB)**. A **Thread** is the basic unit of CPU utilization (lightweight process) managed via a **Thread Control Block (TCB)** within a process.\n\n"
-                "#### 2. Architectural Comparison Table\n\n"
-                "| Feature | Process | Thread |\n"
-                "| :--- | :--- | :--- |\n"
-                "| **Memory Space** | Separate address spaces (isolated) | Shared address space (code, data, heap) |\n"
-                "| **Context Switch Overhead** | High (flushes TLB, cache, register set) | Low (registers and stack pointer only) |\n"
-                "| **Communication** | Inter-Process Communication (IPC: pipes, sockets) | Direct shared memory read/write |\n"
-                "| **Fault Isolation** | High (one crashing process does not kill others) | Low (one crashing thread can kill entire process) |\n"
-                "| **Creation Cost** | Expensive (`fork()` duplicates memory maps) | Inexpensive (allocates only stack and registers) |\n\n"
-                "#### 3. Architecture Diagram\n"
-                "```mermaid\n"
-                "graph TD\n"
-                "    subgraph Process Memory Space\n"
-                "        Code[Shared Code Section]\n"
-                "        Data[Shared Data & Heap Section]\n"
-                "        subgraph Thread 1\n"
-                "            T1_Reg[Registers] --- T1_Stack[Private Stack]\n"
-                "        end\n"
-                "        subgraph Thread 2\n"
-                "            T2_Reg[Registers] --- T2_Stack[Private Stack]\n"
-                "        end\n"
-                "    end\n"
-                "```\n\n"
-                "#### 4. Semester Exam Conclusion\n"
-                "Threads provide high concurrency and fast communication at the expense of memory isolation, while processes provide robust fault tolerance."
-            )
-        else:
+        elif marks in (10, 16):
             return (
                 disclaimer +
                 "# Process vs Thread & Multithreading Models — 10-Marks Master Solution\n\n"
@@ -951,10 +872,41 @@ def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks
                 "## 6. Semester Exam Conclusion\n"
                 "For university exams, draw the shared vs private memory diagram, explain the PCB vs TCB structures, and compare context-switching overheads to score full 10 marks."
             )
+        else:
+            return (
+                disclaimer +
+                "### 📝 Process vs Thread — 5-Marks Structured Comparison\n\n"
+                "#### 1. Definition\n"
+                "A **Process** is an active execution instance of a program managed via a **Process Control Block (PCB)**. A **Thread** is the basic unit of CPU utilization (lightweight process) managed via a **Thread Control Block (TCB)** within a process.\n\n"
+                "#### 2. Architectural Comparison Table\n\n"
+                "| Feature | Process | Thread |\n"
+                "| :--- | :--- | :--- |\n"
+                "| **Memory Space** | Separate address spaces (isolated) | Shared address space (code, data, heap) |\n"
+                "| **Context Switch Overhead** | High (flushes TLB, cache, register set) | Low (registers and stack pointer only) |\n"
+                "| **Communication** | Inter-Process Communication (IPC: pipes, sockets) | Direct shared memory read/write |\n"
+                "| **Fault Isolation** | High (one crashing process does not kill others) | Low (one crashing thread can kill entire process) |\n"
+                "| **Creation Cost** | Expensive (`fork()` duplicates memory maps) | Inexpensive (allocates only stack and registers) |\n\n"
+                "#### 3. Architecture Diagram\n"
+                "```mermaid\n"
+                "graph TD\n"
+                "    subgraph Process Memory Space\n"
+                "        Code[Shared Code Section]\n"
+                "        Data[Shared Data & Heap Section]\n"
+                "        subgraph Thread 1\n"
+                "            T1_Reg[Registers] --- T1_Stack[Private Stack]\n"
+                "        end\n"
+                "        subgraph Thread 2\n"
+                "            T2_Reg[Registers] --- T2_Stack[Private Stack]\n"
+                "        end\n"
+                "    end\n"
+                "```\n\n"
+                "#### 4. Semester Exam Conclusion\n"
+                "Threads provide high concurrency and fast communication at the expense of memory isolation, while processes provide robust fault tolerance."
+            )
 
     # ── 6. PAGING VS SEGMENTATION ────────────────────────────────────────────
-    elif "paging" in t or "segmentation" in t or "virtual memory" in t:
-        if is_explicit_marks and marks == 2:
+    elif any(k in t or k in expanded for k in ["paging", "segmentation", "virtual memory", "page table"]):
+        if marks == 2:
             return (
                 disclaimer +
                 "### 🎯 Paging vs Segmentation — 2-Marks University Answer\n\n"
@@ -965,31 +917,7 @@ def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks
                 "- **Fragmentation:** Paging suffers from **Internal Fragmentation** (unused space in the last page); Segmentation suffers from **External Fragmentation**.\n\n"
                 "> 💡 **Exam Tip:** Paging is fixed-size (hardware view); Segmentation is variable-size (user/programmer view)."
             )
-        elif is_explicit_marks and marks == 5:
-            return (
-                disclaimer +
-                "### 📝 Paging vs Segmentation — 5-Marks Structured Explanation\n\n"
-                "#### 1. Definition\n"
-                "**Paging** and **Segmentation** are non-contiguous memory management techniques in operating systems that map logical program addresses to physical RAM.\n\n"
-                "#### 2. Comparison Table\n\n"
-                "| Parameter | Paging | Segmentation |\n"
-                "| :--- | :--- | :--- |\n"
-                "| **Block Size** | Fixed size (e.g. 4 KB) | Variable size based on module logic |\n"
-                "| **Visible to Programmer?**| ❌ No (transparent to user) | ✅ Yes (divided by user/compiler) |\n"
-                "| **Address Structure** | Page number ($p$) + Page offset ($d$) | Segment number ($s$) + Segment offset ($d$) |\n"
-                "| **Lookup Table** | Page Table | Segment Table (Base + Limit) |\n"
-                "| **Fragmentation** | Suffers from **Internal Fragmentation** | Suffers from **External Fragmentation** |\n\n"
-                "#### 3. Paging Address Translation Diagram\n"
-                "```mermaid\n"
-                "graph LR\n"
-                "    A[Logical Address: Page p, Offset d] --> B[Page Table]\n"
-                "    B --> C[Physical Frame f]\n"
-                "    C --> D[Physical Address: Frame f, Offset d]\n"
-                "```\n\n"
-                "#### 4. Conclusion\n"
-                "Modern operating systems combine both techniques into **Segmented Paging** (e.g., x86 architecture) to eliminate external fragmentation while preserving logical modularity."
-            )
-        else:
+        elif marks in (10, 16):
             return (
                 disclaimer +
                 "# Paging vs Segmentation & Virtual Memory Translation — 10-Marks Solution\n\n"
@@ -1031,6 +959,30 @@ def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks
                 "## 6. Semester Exam Conclusion\n"
                 "Conclude by stating that real-world architectures (e.g., Linux on x86-64) implement **Multilevel Paging with TLB** (e.g., 4-level PML4 paging) to handle 64-bit address spaces efficiently."
             )
+        else:
+            return (
+                disclaimer +
+                "### 📝 Paging vs Segmentation — 5-Marks Structured Explanation\n\n"
+                "#### 1. Definition\n"
+                "**Paging** and **Segmentation** are non-contiguous memory management techniques in operating systems that map logical program addresses to physical RAM.\n\n"
+                "#### 2. Comparison Table\n\n"
+                "| Parameter | Paging | Segmentation |\n"
+                "| :--- | :--- | :--- |\n"
+                "| **Block Size** | Fixed size (e.g. 4 KB) | Variable size based on module logic |\n"
+                "| **Visible to Programmer?**| ❌ No (transparent to user) | ✅ Yes (divided by user/compiler) |\n"
+                "| **Address Structure** | Page number ($p$) + Page offset ($d$) | Segment number ($s$) + Segment offset ($d$) |\n"
+                "| **Lookup Table** | Page Table | Segment Table (Base + Limit) |\n"
+                "| **Fragmentation** | Suffers from **Internal Fragmentation** | Suffers from **External Fragmentation** |\n\n"
+                "#### 3. Paging Address Translation Diagram\n"
+                "```mermaid\n"
+                "graph LR\n"
+                "    A[Logical Address: Page p, Offset d] --> B[Page Table]\n"
+                "    B --> C[Physical Frame f]\n"
+                "    C --> D[Physical Address: Frame f, Offset d]\n"
+                "```\n\n"
+                "#### 4. Conclusion\n"
+                "Modern operating systems combine both techniques into **Segmented Paging** (e.g., x86 architecture) to eliminate external fragmentation while preserving logical modularity."
+            )
 
     return None
 
@@ -1047,7 +999,7 @@ def build_universal_curriculum_answer(topic: str, marks: int, is_explicit_marks:
     clean_topic = topic.title()
     disclaimer = get_not_in_materials_disclaimer(clean_topic)
 
-    if is_explicit_marks and marks == 2:
+    if marks == 2:
         return (
             disclaimer +
             f"### 🎯 {clean_topic} — 2-Marks University Exam Answer\n\n"
@@ -1059,35 +1011,7 @@ def build_universal_curriculum_answer(topic: str, marks: int, is_explicit_marks:
             f"> 💡 **Exam Tip:** Keep the definition under 3 lines and cite the primary rule or equation to secure full 2 marks."
         )
 
-    elif is_explicit_marks and marks == 5:
-        return (
-            disclaimer +
-            f"### 📝 {clean_topic} — 5-Marks Structured Concept Explanation\n\n"
-            f"#### 1. Definition\n"
-            f"**{clean_topic}** refers to the structured engineering methodology used to coordinate operations, optimize system throughput, and eliminate unexpected failure states across computing architectures.\n\n"
-            f"#### 2. Simple Explanation\n"
-            f"In simple terms, **{clean_topic}** establishes an agreed-upon contract between system modules. "
-            f"Instead of allowing uncoordinated executions that can cause data corruption or bottlenecks, it breaks the task into explicit stages with verification checkpoints.\n\n"
-            f"#### 3. Important Points\n"
-            f"- **Input Validation:** Ingests parameters and checks boundary constraints before state changes.\n"
-            f"- **Core Processing:** Applies algorithmic logic or protocol rules predictably.\n"
-            f"- **Error Containment:** Discards invalid intermediate states or triggers localized recovery.\n"
-            f"- **Standardization:** Follows standard university syllabus models.\n\n"
-            f"#### 4. System Flow Diagram\n"
-            f"```mermaid\n"
-            f"graph LR\n"
-            f"    A[Input Parameters] --> B[Boundary Validation Check]\n"
-            f"    B --> C[Core Transformation / Logic]\n"
-            f"    C --> D[Integrity Verification Checkpoint]\n"
-            f"    D --> E[Verified Output / Committed State]\n"
-            f"```\n\n"
-            f"#### 5. Practical Example\n"
-            f"In real-world engineering systems, when an input request arrives, the system validates bounds, executes the core algorithm, and commits state only after passing validation.\n\n"
-            f"#### 6. Short Conclusion\n"
-            f"Mastering **{clean_topic}** provides the theoretical grounding required for semester examinations and technical design interviews."
-        )
-
-    elif is_explicit_marks and marks == 10:
+    elif marks in (10, 16):
         return (
             disclaimer +
             f"# {clean_topic} — 10-Marks Comprehensive University Solution\n\n"
@@ -1101,7 +1025,7 @@ def build_universal_curriculum_answer(topic: str, marks: int, is_explicit_marks:
             f"2. **Phase 2: Invariant Validation:** Boundary conditions and security/integrity constraints are evaluated.\n"
             f"3. **Phase 3: Core Algorithmic Execution:** The primary mathematical formulas or logic routines transform data.\n"
             f"4. **Phase 4: Verification & Handoff:** Results are validated against checksums, invariants, or expected outputs before being persisted.\n\n"
-            f"## 4. Architectural Block Diagram\n"
+            f"## 4. Architectural Block Diagram (Simple to Draw in Exam)\n"
             f"```mermaid\n"
             f"graph TD\n"
             f"    A[Incoming Request / Raw Data] --> B[Validation Checkpoint]\n"
@@ -1126,25 +1050,29 @@ def build_universal_curriculum_answer(topic: str, marks: int, is_explicit_marks:
     else:
         return (
             disclaimer +
-            f"### {clean_topic}\n\n"
+            f"### 📝 {clean_topic} — 5-Marks Structured Concept Explanation\n\n"
             f"#### 1. Definition\n"
-            f"**{clean_topic}** is a core engineering concept that defines the standard operational protocol or algorithmic rules governing state transitions and data integrity in computing systems.\n\n"
+            f"**{clean_topic}** refers to the structured engineering methodology used to coordinate operations, optimize system throughput, and eliminate unexpected failure states across computing architectures.\n\n"
             f"#### 2. Simple Explanation\n"
-            f"In simple terms, **{clean_topic}** ensures that system components interact according to predefined rules rather than chaotic, non-deterministic execution.\n\n"
+            f"In simple terms, **{clean_topic}** establishes an agreed-upon contract between system modules. "
+            f"Instead of allowing uncoordinated executions that can cause data corruption or bottlenecks, it breaks the task into explicit stages with verification checkpoints.\n\n"
             f"#### 3. Important Points\n"
-            f"- **Predictability:** Operates within mathematically provable bounds.\n"
-            f"- **Modularity:** Separates concerns between input handling, core execution, and verification.\n"
-            f"- **Error Resistance:** Detects and handles invalid states gracefully.\n\n"
-            f"#### 4. Architecture Diagram\n"
+            f"- **Input Validation:** Ingests parameters and checks boundary constraints before state changes.\n"
+            f"- **Core Processing:** Applies algorithmic logic or protocol rules predictably.\n"
+            f"- **Error Containment:** Discards invalid intermediate states or triggers localized recovery.\n"
+            f"- **Standardization:** Follows standard university syllabus models.\n\n"
+            f"#### 4. System Flow Diagram (Easy to Draw in Exam)\n"
             f"```mermaid\n"
             f"graph LR\n"
-            f"    A[Input] --> B[Processing: {clean_topic}] --> C[Verified Output]\n"
+            f"    A[Input Parameters] --> B[Boundary Validation Check]\n"
+            f"    B --> C[Core Transformation / Logic]\n"
+            f"    C --> D[Integrity Verification Checkpoint]\n"
+            f"    D --> E[Verified Output / Committed State]\n"
             f"```\n\n"
-            f"#### 5. Advantages & Limitations\n"
-            f"- **Advantages:** High reliability, clear verification rules, and robust maintainability.\n"
-            f"- **Limitations:** Slight runtime overhead due to validation checkpoints.\n\n"
+            f"#### 5. Practical Example\n"
+            f"In real-world engineering systems, when an input request arrives, the system validates bounds, executes the core algorithm, and commits state only after passing validation.\n\n"
             f"#### 6. Short Conclusion\n"
-            f"**{clean_topic}** is a standard syllabus topic. Stating the definition, diagram, and key rule guarantees full marks."
+            f"Mastering **{clean_topic}** provides the theoretical grounding required for semester examinations and technical design interviews."
         )
 
 
@@ -1165,18 +1093,25 @@ def generate_structured_response(
     1. If student uploaded materials match query:
        Extract definitions, Q&A, and easy tricks directly from student's notes (Primary Grounding).
     2. If topic is not in uploaded materials:
-       Output clear anti-hallucination notice and provide high-yield university curriculum answer.
+       Provide high-yield university curriculum answer without displaying 'Not Found'.
     """
-    has_explicit_marks = bool(marks is not None or re.search(r"\b(\d+\s*marks?|\d+m|short\s*note|viva\s*note|for\s+\d+\s*marks?)\b", query, re.I))
+    # 1. Query-explicit marks ALWAYS takes precedence over UI payload defaults
+    query_explicit_marks = check_query_explicit_marks(query)
     effective_marks = None
-    if marks is not None:
+    is_explicit_marks = False
+
+    if query_explicit_marks is not None:
+        effective_marks = query_explicit_marks
+        is_explicit_marks = True
+    elif marks is not None:
         try:
             effective_marks = int(marks)
+            is_explicit_marks = True
         except (ValueError, TypeError):
             effective_marks = None
+
     if effective_marks is None:
-        effective_marks = detect_marks(query, explain_level) if has_explicit_marks else 5
-    is_explicit_marks = has_explicit_marks
+        effective_marks = detect_marks(query, explain_level)
 
     # Clean query topic thoroughly
     q_target = query
@@ -1197,6 +1132,9 @@ def generate_structured_response(
     clean_topic = re.sub(r"[?!.,;:]+$", "", clean_topic).strip()
     if not clean_topic:
         clean_topic = "Engineering Topic"
+
+    query_info = extract_topic_and_expansions(query)
+    clean_topic = query_info.get("clean_topic") or clean_topic
 
     # ── BRANCH 1: Grounded in Student's Uploaded Materials ──────────────────
     if context_chunks and len(context_chunks) > 0:
@@ -1219,7 +1157,7 @@ def generate_structured_response(
             )
 
     # ── BRANCH 2: Topic Not in Uploaded Materials (Curriculum Master) ────────
-    curriculum_ans = get_curriculum_master_answer(clean_topic, effective_marks, is_explicit_marks)
+    curriculum_ans = get_curriculum_master_answer(clean_topic, effective_marks, is_explicit_marks, query_info=query_info)
     if curriculum_ans:
         return curriculum_ans
 

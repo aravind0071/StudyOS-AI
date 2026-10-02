@@ -56,6 +56,7 @@ class RegisterResponse(BaseModel):
     email: str
     demo_otp: str | None = None
     email_sent: bool = True
+    expires_in_seconds: int = 600
 
 
 class VerifyOTPRequest(BaseModel):
@@ -86,6 +87,7 @@ class LoginResponse(BaseModel):
     is_registration_verification: bool = False
     demo_otp: str | None = None
     email_sent: bool = True
+    expires_in_seconds: int = 600
 
 
 
@@ -98,6 +100,7 @@ class ResendOTPResponse(BaseModel):
     message: str
     demo_otp: str | None = None
     email_sent: bool = True
+    expires_in_seconds: int = 600
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -111,6 +114,7 @@ class ForgotPasswordResponse(BaseModel):
     user_id: str
     demo_otp: str | None = None
     email_sent: bool = True
+    expires_in_seconds: int = 600
 
 
 class ResetPasswordRequest(BaseModel):

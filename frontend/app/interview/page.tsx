@@ -7,7 +7,8 @@ import {
   Mic, Brain, Send, Loader2, ChevronRight, ChevronLeft,
   CheckCircle, Award, ArrowLeft, Zap, Sparkles, CheckCircle2,
   BookOpen, Code2, ShieldAlert, Cpu, Network, Lightbulb, Clock,
-  RefreshCw, LogOut, SkipForward, Pencil, Terminal
+  RefreshCw, LogOut, SkipForward, Pencil, Terminal, AlertCircle,
+  HelpCircle, BarChart3, Layers, Check, X
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -55,9 +56,11 @@ interface QuestionState {
   question: string;
   order: number;
   difficulty: string;
+  stage?: string;
   userAnswer: string;
   feedback: any | null;
   isSubmitted: boolean;
+  isSkipped: boolean;
 }
 
 export default function InterviewPage() {
@@ -73,13 +76,14 @@ export default function InterviewPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const [submitting, setSubmitting] = useState(false);
+  const [skipping, setSkipping] = useState(false);
   const [loadingNext, setLoadingNext] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
 
-  // Performance history during current session
+  // Performance history during current session (tracks overall scores of submitted questions)
   const [scoreHistory, setScoreHistory] = useState<number[]>([]);
 
-  // Scroll to top whenever question index changes so header is never scrolled off
+  // Scroll to top whenever question index changes
   const navigateToQuestion = (targetIndex: number) => {
     setCurrentIndex(targetIndex);
     if (typeof window !== "undefined") {
@@ -102,9 +106,11 @@ export default function InterviewPage() {
         question: data.first_question.question,
         order: data.first_question.order || 0,
         difficulty: data.first_question.difficulty || "easy",
+        stage: data.first_question.stage || "Basic Concept",
         userAnswer: "",
         feedback: null,
         isSubmitted: false,
+        isSkipped: false,
       };
 
       setQuestions([firstQ]);
@@ -136,9 +142,10 @@ export default function InterviewPage() {
     try {
       const { data } = await interviewApi.answer(sessionId, currentQ.id, currentQ.userAnswer);
 
-      // Record score if evaluated
-      if (data.correctness_score !== undefined) {
-        setScoreHistory((prev) => [...prev, data.correctness_score]);
+      // Record score only after real answer submission
+      const evScore = data.overall_score !== undefined ? data.overall_score : data.correctness_score;
+      if (typeof evScore === "number") {
+        setScoreHistory((prev) => [...prev, evScore]);
       }
 
       // Update question state with evaluation feedback
@@ -149,12 +156,13 @@ export default function InterviewPage() {
                 ...q,
                 feedback: data,
                 isSubmitted: true,
+                isSkipped: false,
               }
             : q
         )
       );
 
-      toast.success("Answer evaluated!");
+      toast.success("Answer evaluated across 5 dimensions!");
 
       if (data.session_complete) {
         toast.success("Interview session completed!");
@@ -166,14 +174,61 @@ export default function InterviewPage() {
     }
   };
 
-  // Backward navigation: Move to previous question (never locks, retains user draft)
+  const handleSkipQuestion = async () => {
+    if (!currentQ || submitting || skipping) return;
+    setSkipping(true);
+    try {
+      const { data } = await interviewApi.skip(sessionId, currentQ.id);
+
+      setQuestions((prev) =>
+        prev.map((q, idx) =>
+          idx === currentIndex
+            ? {
+                ...q,
+                userAnswer: "[Candidate skipped question]",
+                feedback: data,
+                isSubmitted: true,
+                isSkipped: true,
+              }
+            : q
+        )
+      );
+
+      toast.info("Question marked as skipped.");
+
+      if (data.next_question) {
+        const nextData = data.next_question;
+        const nextQ: QuestionState = {
+          id: nextData.id,
+          question: nextData.question,
+          order: nextData.order || questions.length,
+          difficulty: nextData.difficulty || "medium",
+          stage: nextData.stage,
+          userAnswer: "",
+          feedback: null,
+          isSubmitted: false,
+          isSkipped: false,
+        };
+        setQuestions((prev) => [...prev, nextQ]);
+        navigateToQuestion(currentIndex + 1);
+      } else if (data.session_complete) {
+        setPhase("complete");
+      }
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setSkipping(false);
+    }
+  };
+
+  // Backward navigation
   const handlePrev = () => {
     if (currentIndex > 0) {
       navigateToQuestion(currentIndex - 1);
     }
   };
 
-  // Forward navigation: Move to next question (generates/fetches if not created, without forcing 0% skip)
+  // Forward navigation
   const handleNext = async () => {
     // 1. If next question already exists in our array, simply move to it
     if (currentIndex < questions.length - 1) {
@@ -189,9 +244,11 @@ export default function InterviewPage() {
         question: nextData.question,
         order: nextData.order || questions.length,
         difficulty: nextData.difficulty || "medium",
+        stage: nextData.stage,
         userAnswer: "",
         feedback: null,
         isSubmitted: false,
+        isSkipped: false,
       };
       setQuestions((prev) => [...prev, nextQ]);
       navigateToQuestion(currentIndex + 1);
@@ -204,7 +261,7 @@ export default function InterviewPage() {
       return;
     }
 
-    // 4. If current question is unsubmitted, generate next question without marking current as skipped!
+    // 4. Generate next question without marking current as skipped
     setLoadingNext(true);
     try {
       const { data } = await interviewApi.nextQuestion(sessionId, currentQ?.order ?? currentIndex);
@@ -214,9 +271,11 @@ export default function InterviewPage() {
           question: data.next_question.question,
           order: data.next_question.order,
           difficulty: data.next_question.difficulty,
+          stage: data.next_question.stage,
           userAnswer: "",
           feedback: null,
           isSubmitted: false,
+          isSkipped: false,
         };
         setQuestions((prev) => [...prev, nextQ]);
         navigateToQuestion(currentIndex + 1);
@@ -233,7 +292,7 @@ export default function InterviewPage() {
   // Allow re-editing an already evaluated question
   const handleReattempt = () => {
     setQuestions((prev) =>
-      prev.map((q, idx) => (idx === currentIndex ? { ...q, feedback: null } : q))
+      prev.map((q, idx) => (idx === currentIndex ? { ...q, feedback: null, isSubmitted: false, isSkipped: false } : q))
     );
   };
 
@@ -242,6 +301,7 @@ export default function InterviewPage() {
     setPhase("setup");
     setQuestions([]);
     setCurrentIndex(0);
+    setScoreHistory([]);
     toast.info("Exited interview session.");
   };
 
@@ -253,15 +313,15 @@ export default function InterviewPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
-              <Mic className="w-5 h-5 text-purple-500" /> Interview Mode
+              <Mic className="w-5 h-5 text-purple-500" /> AI Interview & Project Viva
             </h1>
             <p className="text-slate-500 dark:text-slate-400 text-sm">
-              AI conducts a real mock technical interview with progressive difficulty and live instant feedback.
+              Adaptive 10-stage mock interview with progressive depth, zero duplicate questions, and rigorous 5D scoring.
             </p>
           </div>
         </div>
 
-        {/* Full-width Responsive Grid matching Quizzes page */}
+        {/* Responsive Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Interview Config Form (Left 2 cols) */}
           <div className="card p-6 space-y-5 lg:col-span-2">
@@ -275,13 +335,13 @@ export default function InterviewPage() {
                   {
                     id: "technical",
                     label: "Technical Interview",
-                    desc: "Topic-based concept, algorithmic & architectural questioning",
+                    desc: "Topic-based concept, algorithmic, architectural & edge-case questioning",
                     icon: Brain,
                   },
                   {
                     id: "project_viva",
                     label: "Project Viva",
-                    desc: "Rigorous defense of your capstone or semester project",
+                    desc: "Rigorous defense of your capstone project, tech stack & architecture",
                     icon: Code2,
                   },
                 ].map((m) => {
@@ -297,7 +357,7 @@ export default function InterviewPage() {
                         }
                       }}
                       className={clsx(
-                        "p-4 rounded-xl border text-left transition-all relative flex flex-col justify-between",
+                        "p-4 rounded-xl border text-left transition-all relative flex flex-col justify-between cursor-pointer",
                         mode === m.id
                           ? "bg-purple-500/15 border-purple-500/50 text-purple-700 dark:text-purple-300 font-semibold ring-2 ring-purple-500/20 shadow-sm"
                           : "border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/40 hover:border-slate-400 dark:hover:border-slate-600"
@@ -327,7 +387,7 @@ export default function InterviewPage() {
                   type="text"
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
-                  placeholder="e.g. Operating Systems, Machine Learning, Python, DBMS"
+                  placeholder="e.g. Operating Systems, Machine Learning, Python, DBMS, System Design"
                   style={{ paddingLeft: "2.75rem" }}
                   className="input-field text-sm"
                 />
@@ -347,7 +407,7 @@ export default function InterviewPage() {
                       if (t === "Project Viva") setMode("project_viva");
                     }}
                     className={clsx(
-                      "text-[11px] px-2.5 py-0.5 rounded-full transition-all border",
+                      "text-[11px] px-2.5 py-0.5 rounded-full transition-all border cursor-pointer",
                       topic === t
                         ? "bg-purple-500/20 border-purple-500/50 text-purple-600 dark:text-purple-300 font-bold shadow-sm"
                         : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-purple-500/15 hover:text-purple-500 hover:border-purple-500/30 border-slate-200 dark:border-white/[0.08]"
@@ -361,17 +421,20 @@ export default function InterviewPage() {
 
             {/* Project viva description */}
             {mode === "project_viva" && (
-              <div className="animate-fadeIn">
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Project Description & Architecture Summary
+              <div className="animate-fadeIn space-y-1.5">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  Project Description & Technology Stack <span className="text-rose-500">*</span>
                 </label>
                 <textarea
                   value={projectDesc}
                   onChange={(e) => setProjectDesc(e.target.value)}
-                  placeholder="Describe your project briefly — tech stack (e.g. Next.js, FastAPI, PostgreSQL), problem solved, design patterns, and key features..."
+                  placeholder="Enter details about your capstone or semester project:&#10;• Technologies: e.g. Next.js, FastAPI, PostgreSQL, Redis, Docker&#10;• Core Problem: What does it solve and for whom?&#10;• Key Features: Authentication, real-time messaging, payments, etc."
                   rows={4}
                   className="input-field resize-none text-sm"
                 />
+                <p className="text-[11px] text-slate-400">
+                  The AI interviewer will analyze your specific technologies and architecture to generate 10 unique, non-duplicate viva questions.
+                </p>
               </div>
             )}
 
@@ -379,31 +442,86 @@ export default function InterviewPage() {
             <button
               onClick={startSession}
               disabled={loading || !topic.trim()}
-              className="btn-primary w-full py-3.5 shadow-lg shadow-emerald-500/20 text-sm font-bold flex items-center justify-center gap-2"
+              className="btn-primary w-full py-3.5 shadow-lg shadow-purple-500/20 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer"
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin" /> Initializing AI Interviewer...
+                  <Loader2 className="w-5 h-5 animate-spin" /> Initializing Adaptive Interviewer...
                 </>
               ) : (
                 <>
-                  <Mic className="w-5 h-5" /> Start Interview Session
+                  <Mic className="w-5 h-5" /> Start Mock Interview
                 </>
               )}
             </button>
           </div>
 
-          {/* Quick Interview Tracks & Evaluation Criteria (Right 1 col) */}
+          {/* 10-Stage Progression & 5D Rubric (Right 1 col) */}
           <div className="space-y-4">
-            {/* Quick Track Presets */}
+            {/* 10-Stage Blueprint */}
             <div className="card p-5 space-y-3">
               <div className="flex items-center gap-2 font-bold text-sm text-slate-900 dark:text-white">
-                <Sparkles className="w-4 h-4 text-amber-500" /> Curated Interview Tracks
+                <Layers className="w-4 h-4 text-purple-500" /> 10-Stage Interview Progression
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                1-click launch mock interviews for top industry and university rounds:
+                Every question is genuinely distinct and calibrated to a specific technical stage:
               </p>
-              <div className="space-y-2 pt-1">
+              <div className="grid grid-cols-2 gap-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-300 pt-1">
+                {[
+                  "1. Basic Concept",
+                  "2. Why It Is Used",
+                  "3. How It Works",
+                  "4. Architecture & Design",
+                  "5. Implementation",
+                  "6. Technical Details",
+                  "7. Practical Example",
+                  "8. Problem / Edge Case",
+                  "9. Project Application",
+                  "10. Deeper Follow-up",
+                ].map((st, i) => (
+                  <div key={i} className="flex items-center gap-1.5 p-1 rounded bg-slate-50 dark:bg-white/[0.03]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
+                    <span className="truncate">{st}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 5-Dimensional Scoring Standard */}
+            <div className="card p-5 space-y-2.5">
+              <div className="flex items-center gap-2 font-bold text-sm text-slate-900 dark:text-white">
+                <Award className="w-4 h-4 text-purple-500" /> 5-Dimensional Scoring Standard
+              </div>
+              <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">Correctness (30%)</span>
+                  <span className="text-slate-400">Accuracy & exact definitions</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">Technical Depth (25%)</span>
+                  <span className="text-slate-400">Internal flow & Big-O trade-offs</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">Relevance (20%)</span>
+                  <span className="text-slate-400">Directly answers question</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">Completeness (15%)</span>
+                  <span className="text-slate-400">Covers all required facets</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">Communication (10%)</span>
+                  <span className="text-slate-400">Clarity & professional tone</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Curated Track Presets */}
+            <div className="card p-5 space-y-2">
+              <div className="flex items-center gap-2 font-bold text-xs text-slate-900 dark:text-white">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Curated Track Presets
+              </div>
+              <div className="space-y-1.5">
                 {CURATED_TRACKS.map((track) => (
                   <button
                     key={track.title}
@@ -411,57 +529,15 @@ export default function InterviewPage() {
                     onClick={() => {
                       setTopic(track.topic);
                       setMode(track.mode);
-                      toast.success(`Loaded "${track.title}" track.`);
+                      toast.success(`Selected "${track.title}" track.`);
                     }}
-                    className="w-full text-left p-2.5 rounded-xl border border-slate-200 dark:border-white/[0.08] hover:border-purple-500/40 bg-slate-50/50 dark:bg-white/[0.02] hover:bg-purple-500/5 transition-all group"
+                    className="w-full text-left p-2 rounded-lg border border-slate-200 dark:border-white/[0.08] hover:border-purple-500/40 bg-slate-50/50 dark:bg-white/[0.02] transition-all text-xs"
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 group-hover:text-purple-400">
-                        {track.title}
-                      </span>
-                      <span className="text-[10px] uppercase font-bold badge badge-slate">
-                        {track.level}
-                      </span>
-                    </div>
-                    <div className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
-                      {track.desc}
-                    </div>
+                    <div className="font-semibold text-slate-800 dark:text-slate-200">{track.title}</div>
+                    <div className="text-[10px] text-slate-500 line-clamp-1">{track.desc}</div>
                   </button>
                 ))}
               </div>
-            </div>
-
-            {/* Live Evaluation Standard */}
-            <div className="card p-5 space-y-2.5">
-              <div className="flex items-center gap-2 font-bold text-sm text-slate-900 dark:text-white">
-                <Award className="w-4 h-4 text-purple-500" /> Real-time Scoring Standard
-              </div>
-              <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  <span><strong>Accuracy:</strong> Algorithmic correctness & exact technical terminology</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  <span><strong>Depth:</strong> Internal mechanism, edge cases & Big-O complexity</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  <span><strong>Clarity:</strong> Structured reasoning & direct, confident explanations</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  <span><strong>Adaptive AI:</strong> Progressive difficulty calibrated to your answers</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Pro Tip */}
-            <div className="p-4 rounded-xl bg-purple-500/[0.04] border border-purple-500/20 text-xs text-slate-400">
-              <div className="flex items-center gap-1.5 font-bold text-purple-400 mb-1">
-                <Lightbulb className="w-3.5 h-3.5" /> Interviewer Advice
-              </div>
-              State your assumptions upfront, mention time & space trade-offs, and explain your thought process before jumping to conclusions.
             </div>
           </div>
         </div>
@@ -471,6 +547,7 @@ export default function InterviewPage() {
 
   // ── INTERVIEW PHASE ──────────────────────────────────────────────────────
   if (phase === "interview") {
+    // Only calculate average if answers were actually submitted
     const avgScore = scoreHistory.length
       ? Math.round(scoreHistory.reduce((a, b) => a + b, 0) / scoreHistory.length)
       : null;
@@ -485,7 +562,7 @@ export default function InterviewPage() {
                 <Brain className="w-5 h-5 text-purple-500" /> {topic} Mock Interview
               </h1>
               <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
-                Question {currentIndex + 1} of ~10 · AI evaluates your technical depth, accuracy, and communication
+                Question {currentIndex + 1} of 10 · {currentQ?.stage || "Adaptive Stage"} · Real-time 5D evaluation
               </p>
             </div>
 
@@ -509,7 +586,7 @@ export default function InterviewPage() {
             </div>
           </div>
 
-          {/* Quick Question Stepper / Jump Bar */}
+          {/* Quick Question Stepper */}
           <div className="flex items-center gap-1.5 overflow-x-auto pt-3 scrollbar-none">
             <span className="text-xs font-medium text-slate-400 mr-1.5 shrink-0 flex items-center gap-1">
               <Clock className="w-3 h-3 text-purple-500" /> Questions:
@@ -523,19 +600,25 @@ export default function InterviewPage() {
                   "h-7 min-w-7 px-2.5 rounded-lg text-xs font-semibold transition-all shrink-0 flex items-center justify-center gap-1 border cursor-pointer",
                   idx === currentIndex
                     ? "bg-purple-600 text-white border-purple-600 shadow-sm"
+                    : q.isSkipped
+                    ? "bg-slate-200/60 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-white/10"
                     : q.isSubmitted
                     ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
-                    : "bg-slate-100 dark:bg-white/[0.04] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.15]"
+                    : "bg-slate-100 dark:bg-white/[0.04] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/[0.08]"
                 )}
               >
-                {q.isSubmitted && <CheckCircle className="w-2.5 h-2.5 text-emerald-500" />}
+                {q.isSkipped ? (
+                  <span className="text-[10px] text-slate-400 font-mono">Skip</span>
+                ) : q.isSubmitted ? (
+                  <CheckCircle className="w-2.5 h-2.5 text-emerald-500" />
+                ) : null}
                 Q{idx + 1}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Screen-fitting 2-column layout */}
+        {/* 2-column layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-1">
           {/* Main Interview Q&A Section (2 cols) */}
           <div className="lg:col-span-2 space-y-4">
@@ -547,12 +630,14 @@ export default function InterviewPage() {
                     <Brain className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">
-                      Interviewer Question
-                    </span>
-                    <span className="text-xs font-medium text-slate-400 ml-2">
-                      Q#{currentIndex + 1}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                        Interviewer Question
+                      </span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 font-mono text-[10px]">
+                        Stage {currentIndex + 1}: {currentQ?.stage || "Technical Inquiry"}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -562,10 +647,10 @@ export default function InterviewPage() {
               </p>
             </div>
 
-            {/* ANSWER INPUT BOX */}
-            {!currentQ?.feedback ? (
+            {/* ANSWER INPUT BOX (When unsubmitted) */}
+            {!currentQ?.isSubmitted ? (
               <div className="space-y-4">
-                {/* Technical Response Console */}
+                {/* Response Console */}
                 <div className="card p-0 border border-slate-200 dark:border-white/[0.08] shadow-sm rounded-xl overflow-hidden focus-within:border-purple-500 focus-within:ring-1 focus-within:ring-purple-500 transition-all duration-200">
                   {/* Console Header Bar */}
                   <div className="flex flex-wrap items-center justify-between px-4 py-2.5 bg-slate-50 dark:bg-white/[0.03] border-b border-slate-200 dark:border-white/[0.08] text-xs gap-2">
@@ -586,7 +671,6 @@ export default function InterviewPage() {
                             updateCurrentAnswer((currentQ?.userAnswer || "") + snippet);
                           }}
                           className="text-[11px] font-mono px-2 py-0.5 rounded bg-white dark:bg-white/[0.06] hover:bg-purple-500/10 text-slate-600 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-300 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer"
-                          title="Insert code snippet template"
                         >
                           + Code
                         </button>
@@ -597,9 +681,8 @@ export default function InterviewPage() {
                             updateCurrentAnswer((currentQ?.userAnswer || "") + complexity);
                           }}
                           className="text-[11px] font-mono px-2 py-0.5 rounded bg-white dark:bg-white/[0.06] hover:bg-purple-500/10 text-slate-600 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-300 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer"
-                          title="Insert Time & Space complexity template"
                         >
-                          + Complexity (O(n))
+                          + Complexity
                         </button>
                         <button
                           type="button"
@@ -608,14 +691,13 @@ export default function InterviewPage() {
                             updateCurrentAnswer((currentQ?.userAnswer || "") + steps);
                           }}
                           className="text-[11px] font-mono px-2 py-0.5 rounded bg-white dark:bg-white/[0.06] hover:bg-purple-500/10 text-slate-600 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-300 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer"
-                          title="Insert key points template"
                         >
-                          + Points
+                          + Steps
                         </button>
                       </div>
                     </div>
 
-                    {/* Word Counter & Clear Button */}
+                    {/* Word Counter & Clear */}
                     <div className="flex items-center gap-3">
                       {currentQ?.userAnswer && (
                         <button
@@ -630,35 +712,32 @@ export default function InterviewPage() {
                         <span className="text-purple-600 dark:text-purple-400 font-semibold">
                           {currentQ?.userAnswer.trim().split(/\s+/).filter(Boolean).length || 0}
                         </span>{" "}
-                        words ·{" "}
-                        <span>{currentQ?.userAnswer.length || 0}</span> chars
+                        words
                       </div>
                     </div>
                   </div>
 
                   {/* Textarea */}
-                  <div className="relative">
-                    <textarea
-                      value={currentQ?.userAnswer || ""}
-                      onChange={(e) => updateCurrentAnswer(e.target.value)}
-                      onKeyDown={(e) => {
-                        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-                          e.preventDefault();
-                          submitAnswer();
-                        }
-                      }}
-                      placeholder="Type your technical response here...&#10;&#10;• State the core concept, internal execution mechanism, and edge cases.&#10;• Mention Time & Space complexity (e.g. O(log n), O(n)).&#10;• Write code snippets or architectural patterns where relevant.&#10;&#10;Shortcut: Press Ctrl + Enter to submit for evaluation."
-                      rows={12}
-                      className="w-full bg-white dark:bg-[#080b12] text-slate-900 dark:text-slate-100 p-4 sm:p-5 text-sm font-mono leading-relaxed placeholder:text-slate-400 focus:outline-none resize-y min-h-[290px]"
-                    />
-                  </div>
+                  <textarea
+                    value={currentQ?.userAnswer || ""}
+                    onChange={(e) => updateCurrentAnswer(e.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                        e.preventDefault();
+                        submitAnswer();
+                      }
+                    }}
+                    placeholder="Type your technical response here...&#10;&#10;• State the core concept, operational mechanism, and algorithmic details.&#10;• Mention Time & Space complexity (e.g. O(log n), O(n)).&#10;• Include code patterns, trade-offs, or real-world use-cases where relevant.&#10;&#10;Shortcut: Press Ctrl + Enter to submit."
+                    rows={12}
+                    className="w-full bg-white dark:bg-[#080b12] text-slate-900 dark:text-slate-100 p-4 sm:p-5 text-sm font-mono leading-relaxed placeholder:text-slate-400 focus:outline-none resize-y min-h-[290px]"
+                  />
 
-                  {/* Console Bottom Status Footer */}
+                  {/* Console Footer */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-2 bg-slate-50 dark:bg-white/[0.03] border-t border-slate-200 dark:border-white/[0.08] text-[11px] text-slate-500 dark:text-slate-400">
                     <div className="flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                       <span>
-                        <strong>Interviewer Expectation:</strong> 50–150 words with precise definitions & trade-offs.
+                        <strong>Interviewer Expectation:</strong> 40–120 words with precise technical terms & trade-offs.
                       </span>
                     </div>
                     <div className="text-[10px] text-slate-400 font-mono hidden sm:inline-block">
@@ -669,32 +748,48 @@ export default function InterviewPage() {
 
                 {/* Symmetrical Navigation & Action Bar */}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
-                  {/* Backward Button */}
+                  {/* Previous Button */}
                   <button
                     type="button"
                     onClick={handlePrev}
                     disabled={currentIndex === 0}
                     className={clsx(
-                      "flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all w-full sm:w-auto justify-center",
+                      "flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all w-full sm:w-auto justify-center cursor-pointer",
                       currentIndex === 0
-                        ? "opacity-30 cursor-not-allowed border-slate-800 text-slate-600 bg-slate-900/40"
-                        : "border-slate-700 hover:border-purple-500/50 bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white"
+                        ? "opacity-30 cursor-not-allowed border-slate-300 dark:border-slate-800 text-slate-400 dark:text-slate-600 bg-slate-100 dark:bg-slate-900/40"
+                        : "border-slate-300 dark:border-slate-700 hover:border-purple-500 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-purple-600 dark:hover:text-white"
                     )}
                   >
                     <ChevronLeft className="w-4 h-4" /> Previous Question
                   </button>
 
-                  <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                  <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end flex-wrap">
+                    {/* Explicit Skip Question Button */}
+                    <button
+                      type="button"
+                      onClick={handleSkipQuestion}
+                      disabled={skipping || submitting}
+                      className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-white/10 hover:border-amber-500/50 bg-slate-100 dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 hover:text-amber-500 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      title="Skip this question without penalty"
+                    >
+                      {skipping ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <SkipForward className="w-3.5 h-3.5" />
+                      )}
+                      <span>Skip Question</span>
+                    </button>
+
                     {/* Submit Answer Button */}
                     <button
                       type="button"
                       onClick={submitAnswer}
-                      disabled={submitting || !currentQ?.userAnswer.trim()}
-                      className="btn-primary py-2.5 px-5 text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
+                      disabled={submitting || skipping || !currentQ?.userAnswer.trim()}
+                      className="btn-primary py-2.5 px-5 text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20 cursor-pointer"
                     >
                       {submitting ? (
                         <>
-                          <Loader2 className="w-4 h-4 animate-spin" /> Evaluating...
+                          <Loader2 className="w-4 h-4 animate-spin" /> Evaluating 5D Metrics...
                         </>
                       ) : (
                         <>
@@ -702,107 +797,125 @@ export default function InterviewPage() {
                         </>
                       )}
                     </button>
-
-                    {/* Forward Button (Seamlessly goes to next question without 0% skip lock) */}
-                    <button
-                      type="button"
-                      onClick={handleNext}
-                      disabled={loadingNext}
-                      className="btn-secondary py-2.5 px-4 text-xs font-bold flex items-center justify-center gap-1.5"
-                    >
-                      {loadingNext ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <>
-                          Next Question <ChevronRight className="w-4 h-4" />
-                        </>
-                      )}
-                    </button>
                   </div>
                 </div>
               </div>
             ) : (
-              /* When evaluated, show feedback card WITH Edit / Re-attempt Answer button */
+              /* When evaluated, show diagnostic feedback card with 5D Score breakdown */
               <div className="space-y-4">
                 {/* Your Submitted Answer Card */}
                 <div className="card p-5 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/10">
                   <div className="text-slate-500 dark:text-slate-400 text-xs mb-1.5 font-semibold flex items-center justify-between">
-                    <span>Your Answer</span>
+                    <span>Candidate Submission</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-emerald-500 flex items-center gap-1 text-xs font-bold">
-                        <CheckCircle className="w-3.5 h-3.5" /> Evaluated
-                      </span>
+                      {currentQ.isSkipped ? (
+                        <span className="text-amber-500 flex items-center gap-1 text-xs font-bold">
+                          <AlertCircle className="w-3.5 h-3.5" /> Skipped by Candidate
+                        </span>
+                      ) : (
+                        <span className="text-emerald-500 flex items-center gap-1 text-xs font-bold">
+                          <CheckCircle className="w-3.5 h-3.5" /> Evaluated
+                        </span>
+                      )}
                       <button
                         type="button"
                         onClick={handleReattempt}
-                        className="text-xs text-purple-400 hover:text-purple-300 font-semibold underline flex items-center gap-1 ml-2"
+                        className="text-xs text-purple-500 hover:text-purple-400 font-semibold underline flex items-center gap-1 ml-2 cursor-pointer"
                       >
-                        <Pencil className="w-3 h-3" /> Edit Answer
+                        <Pencil className="w-3 h-3" /> Re-attempt
                       </button>
                     </div>
                   </div>
-                  <p className="text-slate-800 dark:text-slate-200 text-sm leading-relaxed whitespace-pre-wrap">
+                  <p className="text-slate-800 dark:text-slate-200 text-sm leading-relaxed whitespace-pre-wrap font-mono">
                     {currentQ.userAnswer}
                   </p>
                 </div>
 
-                {/* AI Feedback & Score Breakdown */}
-                <div className="card p-6 border border-emerald-500/20 shadow-xl space-y-4">
+                {/* 5-Dimensional AI Feedback & Score Breakdown */}
+                <div className="card p-6 border border-purple-500/20 shadow-xl space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-base">
-                      <Sparkles className="w-4 h-4 text-emerald-500" /> AI Diagnostic Feedback
+                      <Sparkles className="w-4 h-4 text-purple-500" /> AI Diagnostic Evaluation
                     </h3>
-                    <button
-                      type="button"
-                      onClick={handleReattempt}
-                      className="btn-secondary py-1 px-3 text-xs font-semibold flex items-center gap-1.5"
-                    >
-                      <Pencil className="w-3 h-3 text-purple-400" /> Re-attempt Answer
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {currentQ.feedback?.overall_score !== undefined && (
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                          Overall: {Math.round(currentQ.feedback.overall_score)}%
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleReattempt}
+                        className="btn-secondary py-1 px-3 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Pencil className="w-3 h-3 text-purple-500" /> Edit Answer
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
+                  {/* 5D Score Pills Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                     {[
                       {
-                        label: "Accuracy",
-                        value: currentQ.feedback.correctness_score,
+                        label: "Correctness",
+                        value: currentQ.feedback?.correctness_score,
                         color: "text-emerald-500",
                         bg: "bg-emerald-500/10 border-emerald-500/20",
+                        weight: "30%",
+                      },
+                      {
+                        label: "Relevance",
+                        value: currentQ.feedback?.relevance_score ?? currentQ.feedback?.correctness_score,
+                        color: "text-teal-500",
+                        bg: "bg-teal-500/10 border-teal-500/20",
+                        weight: "20%",
                       },
                       {
                         label: "Depth",
-                        value: currentQ.feedback.depth_score,
+                        value: currentQ.feedback?.depth_score,
                         color: "text-sky-500",
                         bg: "bg-sky-500/10 border-sky-500/20",
+                        weight: "25%",
                       },
                       {
-                        label: "Clarity",
-                        value: currentQ.feedback.clarity_score,
+                        label: "Completeness",
+                        value: currentQ.feedback?.completeness_score ?? currentQ.feedback?.depth_score,
+                        color: "text-indigo-500",
+                        bg: "bg-indigo-500/10 border-indigo-500/20",
+                        weight: "15%",
+                      },
+                      {
+                        label: "Communication",
+                        value: currentQ.feedback?.communication_score ?? currentQ.feedback?.clarity_score,
                         color: "text-purple-500",
                         bg: "bg-purple-500/10 border-purple-500/20",
+                        weight: "10%",
                       },
-                    ].map(({ label, value, color, bg }) => (
+                    ].map(({ label, value, color, bg, weight }) => (
                       <div
                         key={label}
-                        className={clsx("text-center p-3 rounded-xl border", bg)}
+                        className={clsx("text-center p-2.5 rounded-xl border", bg)}
                       >
-                        <div className={clsx("text-2xl font-bold tracking-tight", color)}>
-                          {value !== undefined ? `${value.toFixed(0)}%` : "N/A"}
+                        <div className={clsx("text-xl font-bold tracking-tight", color)}>
+                          {value !== undefined ? `${Math.round(value)}%` : "N/A"}
                         </div>
-                        <div className="text-slate-400 text-xs mt-0.5 font-semibold">{label}</div>
+                        <div className="text-slate-600 dark:text-slate-300 text-[10px] mt-0.5 font-bold">{label}</div>
+                        <div className="text-slate-400 text-[9px]">{weight} weight</div>
                       </div>
                     ))}
                   </div>
 
+                  {/* Feedback Narrative */}
                   <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-white/5">
                     <p className="text-slate-800 dark:text-slate-200 text-sm leading-relaxed">
-                      {currentQ.feedback.feedback}
+                      {currentQ.feedback?.feedback || "Evaluation complete."}
                     </p>
                   </div>
 
-                  {currentQ.feedback.missing_points?.length > 0 && (
+                  {/* High-Impact Points Missed */}
+                  {currentQ.feedback?.missing_points?.length > 0 && (
                     <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-2">
-                      <p className="text-amber-500 dark:text-amber-400 text-xs font-bold flex items-center gap-1.5">
+                      <p className="text-amber-600 dark:text-amber-400 text-xs font-bold flex items-center gap-1.5">
                         <Lightbulb className="w-3.5 h-3.5" /> High-Impact Points to Include:
                       </p>
                       <ul className="text-slate-700 dark:text-slate-300 text-xs space-y-1.5 pl-2">
@@ -816,17 +929,27 @@ export default function InterviewPage() {
                     </div>
                   )}
 
+                  {/* Follow-up question if provided */}
+                  {currentQ.feedback?.follow_up_question && (
+                    <div className="p-3.5 rounded-xl bg-purple-500/5 border border-purple-500/15 text-xs text-purple-700 dark:text-purple-300 flex items-start gap-2">
+                      <HelpCircle className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" />
+                      <div>
+                        <strong>Interviewer Follow-up Probe:</strong> {currentQ.feedback.follow_up_question}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Navigation Bar after evaluation */}
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-800">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-200 dark:border-white/10">
                     <button
                       type="button"
                       onClick={handlePrev}
                       disabled={currentIndex === 0}
                       className={clsx(
-                        "flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all w-full sm:w-auto justify-center",
+                        "flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all w-full sm:w-auto justify-center cursor-pointer",
                         currentIndex === 0
-                          ? "opacity-30 cursor-not-allowed border-slate-800 text-slate-600 bg-slate-900/40"
-                          : "border-slate-700 hover:border-purple-500/50 bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-white"
+                          ? "opacity-30 cursor-not-allowed border-slate-300 dark:border-slate-800 text-slate-400 dark:text-slate-600 bg-slate-100 dark:bg-slate-900/40"
+                          : "border-slate-300 dark:border-slate-700 hover:border-purple-500 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-purple-600 dark:hover:text-white"
                       )}
                     >
                       <ChevronLeft className="w-4 h-4" /> Previous Question
@@ -836,11 +959,11 @@ export default function InterviewPage() {
                       type="button"
                       onClick={handleNext}
                       disabled={loadingNext}
-                      className="btn-primary py-2.5 px-6 text-xs font-bold flex items-center justify-center gap-2 w-full sm:w-auto"
+                      className="btn-primary py-2.5 px-6 text-xs font-bold flex items-center justify-center gap-2 w-full sm:w-auto cursor-pointer"
                     >
                       {loadingNext ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : currentIndex < questions.length - 1 || currentQ.feedback.next_question ? (
+                      ) : currentIndex < questions.length - 1 || currentQ.feedback?.next_question ? (
                         <>
                           Next Question <ChevronRight className="w-4 h-4" />
                         </>
@@ -866,14 +989,14 @@ export default function InterviewPage() {
                 </span>
                 <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  Active
+                  Active Round
                 </span>
               </div>
 
               <div className="space-y-2">
                 <div className="flex justify-between text-xs text-slate-400">
                   <span>Questions Explored</span>
-                  <span className="font-bold text-white">{currentIndex + 1} / 10</span>
+                  <span className="font-bold text-slate-900 dark:text-white">{currentIndex + 1} / 10</span>
                 </div>
                 <div className="progress-bar h-2">
                   <div
@@ -883,21 +1006,30 @@ export default function InterviewPage() {
                 </div>
               </div>
 
-              {avgScore !== null && (
+              {/* Only show average answer score if at least one question has been evaluated */}
+              {avgScore !== null ? (
                 <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-center">
                   <div className="text-2xl font-bold tracking-tight text-purple-600 dark:text-purple-400">{avgScore}%</div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Average Answer Score</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Average Submitted Score ({scoreHistory.length} answered)</div>
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.06] text-center">
+                  <div className="text-xs text-slate-400">Score evaluates upon first answer submission</div>
                 </div>
               )}
 
               <div className="pt-2 border-t border-slate-200 dark:border-white/[0.08] text-xs space-y-1.5 text-slate-400">
                 <div className="flex justify-between">
                   <span>Topic:</span>
-                  <span className="font-semibold text-slate-200">{topic}</span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">{topic}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Format:</span>
-                  <span className="font-semibold text-slate-200 capitalize">{mode.replace("_", " ")}</span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200 capitalize">{mode.replace("_", " ")}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Current Stage:</span>
+                  <span className="font-semibold text-purple-500 dark:text-purple-400">{currentQ?.stage || "Basic Concept"}</span>
                 </div>
               </div>
             </div>
@@ -939,28 +1071,38 @@ export default function InterviewPage() {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900 dark:text-white">Exit Mock Interview?</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Are you sure you want to exit this session?</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Are you sure you want to conclude this session?</p>
                 </div>
               </div>
 
               <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-white/[0.04] p-3.5 rounded-xl border border-slate-200 dark:border-white/[0.06]">
-                Your submitted answers and AI scores will remain in your interview history. You will be returned to the interview setup overview.
+                Your submitted answers and AI scores will remain in your interview history. You can view your final evaluation report or start a fresh session.
               </p>
 
               <div className="flex items-center justify-end gap-2.5 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowExitModal(false)}
-                  className="btn-secondary text-xs py-2 px-4"
+                  className="btn-secondary text-xs py-2 px-4 cursor-pointer"
                 >
                   Continue Interview
                 </button>
                 <button
                   type="button"
-                  onClick={handleExitInterview}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 shadow-sm transition-all flex items-center gap-1.5"
+                  onClick={() => {
+                    setShowExitModal(false);
+                    setPhase("complete");
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-purple-600 hover:bg-purple-500 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
                 >
-                  <LogOut className="w-3.5 h-3.5" /> Yes, Exit & Conclude
+                  <BarChart3 className="w-3.5 h-3.5" /> View Performance Report
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExitInterview}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" /> Exit to Setup
                 </button>
               </div>
             </div>
@@ -971,47 +1113,165 @@ export default function InterviewPage() {
   }
 
   // ── COMPLETE PHASE ───────────────────────────────────────────────────────
-  const finalScore = scoreHistory.length
-    ? Math.round(scoreHistory.reduce((a, b) => a + b, 0) / scoreHistory.length)
-    : 85;
+  const submittedQuestions = questions.filter((q) => q.isSubmitted && !q.isSkipped);
+  const skippedQuestions = questions.filter((q) => q.isSkipped);
+  const submittedScores = submittedQuestions
+    .map((q) => q.feedback?.overall_score ?? q.feedback?.correctness_score)
+    .filter((s): s is number => typeof s === "number");
+
+  // Calculate score ONLY from the answers actually submitted (never fallback to 85%!)
+  const finalScore = submittedScores.length
+    ? Math.round(submittedScores.reduce((a, b) => a + b, 0) / submittedScores.length)
+    : null;
+
+  // Average by dimension for submitted answers
+  const avgDim = (dim: string) => {
+    const vals = submittedQuestions
+      .map((q) => q.feedback?.[dim])
+      .filter((v): v is number => typeof v === "number");
+    return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+  };
+
+  const avgCorrectness = avgDim("correctness_score");
+  const avgRelevance = avgDim("relevance_score") ?? avgCorrectness;
+  const avgDepth = avgDim("depth_score");
+  const avgCompleteness = avgDim("completeness_score") ?? avgDepth;
+  const avgCommunication = avgDim("communication_score") ?? avgDim("clarity_score");
 
   return (
-    <div className="w-full space-y-6 animate-fadeIn py-6">
-      <div className="card p-8 sm:p-12 text-center max-w-2xl mx-auto border border-purple-500/20 shadow-xl">
-        <div className="w-16 h-16 bg-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white shadow-sm ring-4 ring-purple-500/10">
+    <div className="w-full space-y-6 animate-fadeIn py-4 max-w-4xl mx-auto">
+      {/* Hero Performance Card */}
+      <div className="card p-6 sm:p-10 border border-purple-500/20 shadow-xl text-center space-y-6">
+        <div className="w-16 h-16 bg-purple-600 rounded-2xl flex items-center justify-center mx-auto text-white shadow-sm ring-4 ring-purple-500/10">
           <Award className="w-8 h-8 text-white" />
         </div>
-        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white mb-2">
-          Interview Complete!
-        </h2>
-        <p className="text-slate-500 dark:text-slate-400 text-sm max-w-md mx-auto mb-6">
-          Great performance on <strong>{topic}</strong>! The AI interviewer evaluated your technical reasoning and answer depth.
-        </p>
 
-        {/* Score Card */}
-        <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto mb-8">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Interview Completed
+          </h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm max-w-md mx-auto mt-1">
+            Performance report for <strong>{topic}</strong> ({mode === "project_viva" ? "Project Viva Defense" : "Technical Interview"}).
+          </p>
+        </div>
+
+        {/* Primary Metrics Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-2xl mx-auto">
           <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10">
-            <div className="text-3xl font-bold tracking-tight text-purple-600 dark:text-purple-400">{finalScore}%</div>
+            <div className="text-2xl sm:text-3xl font-bold tracking-tight text-purple-600 dark:text-purple-400">
+              {finalScore !== null ? `${finalScore}%` : "No Answers"}
+            </div>
             <div className="text-xs text-slate-400 font-semibold mt-1">Overall Mastery</div>
           </div>
           <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10">
-            <div className="text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">{scoreHistory.length || questions.length}</div>
-            <div className="text-xs text-slate-400 font-semibold mt-1">Questions Evaluated</div>
+            <div className="text-2xl sm:text-3xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
+              {submittedQuestions.length}
+            </div>
+            <div className="text-xs text-slate-400 font-semibold mt-1">Answers Evaluated</div>
+          </div>
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10">
+            <div className="text-2xl sm:text-3xl font-bold tracking-tight text-amber-500">
+              {skippedQuestions.length}
+            </div>
+            <div className="text-xs text-slate-400 font-semibold mt-1">Questions Skipped</div>
+          </div>
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10">
+            <div className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-700 dark:text-slate-300">
+              {questions.length}
+            </div>
+            <div className="text-xs text-slate-400 font-semibold mt-1">Total Presented</div>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        {/* 5-Dimensional Competency Breakdown (If answers submitted) */}
+        {submittedQuestions.length > 0 && (
+          <div className="p-5 rounded-2xl bg-slate-50/60 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.08] max-w-2xl mx-auto space-y-3 text-left">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+              <BarChart3 className="w-4 h-4 text-purple-500" /> 5-Dimensional Competency Breakdown
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              {[
+                { label: "Accuracy", val: avgCorrectness, color: "text-emerald-500" },
+                { label: "Relevance", val: avgRelevance, color: "text-teal-500" },
+                { label: "Tech Depth", val: avgDepth, color: "text-sky-500" },
+                { label: "Completeness", val: avgCompleteness, color: "text-indigo-500" },
+                { label: "Communication", val: avgCommunication, color: "text-purple-500" },
+              ].map(({ label, val, color }) => (
+                <div key={label} className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-center">
+                  <div className={clsx("text-lg font-bold", color)}>
+                    {val !== null ? `${val}%` : "N/A"}
+                  </div>
+                  <div className="text-[10.5px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Detailed Question Review List */}
+        <div className="text-left space-y-3 max-w-2xl mx-auto pt-2">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Layers className="w-4 h-4 text-purple-500" /> Question-by-Question Audit
+          </h3>
+
+          <div className="space-y-2.5">
+            {questions.map((q, idx) => {
+              const isSk = q.isSkipped || q.userAnswer === "[Candidate skipped question]";
+              const sc = q.feedback?.overall_score ?? q.feedback?.correctness_score;
+              return (
+                <div
+                  key={q.id || idx}
+                  className="p-3.5 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-slate-900/50 space-y-1.5 text-xs"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-purple-600 dark:text-purple-400">
+                      Q{idx + 1}: {q.stage || "Stage Inquiry"}
+                    </span>
+                    {isSk ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                        Skipped
+                      </span>
+                    ) : sc !== undefined ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                        Score: {Math.round(sc)}%
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400">Unanswered</span>
+                    )}
+                  </div>
+                  <div className="text-slate-800 dark:text-slate-200 font-medium">
+                    {q.question}
+                  </div>
+                  {q.userAnswer && !isSk && (
+                    <div className="text-slate-500 dark:text-slate-400 text-[11px] line-clamp-2 italic">
+                      &quot;{q.userAnswer}&quot;
+                    </div>
+                  )}
+                  {q.feedback?.feedback && !isSk && (
+                    <div className="text-[11px] text-emerald-600 dark:text-emerald-400 pt-1">
+                      💡 {q.feedback.feedback}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
           <button
             onClick={() => {
               setQuestions([]);
               setCurrentIndex(0);
+              setScoreHistory([]);
               setPhase("setup");
             }}
-            className="btn-primary flex items-center justify-center gap-2"
+            className="btn-primary flex items-center justify-center gap-2 cursor-pointer"
           >
             <Mic className="w-4 h-4" /> Start Another Interview
           </button>
-          <a href="/analytics" className="btn-secondary flex items-center justify-center gap-2">
+          <a href="/analytics" className="btn-secondary flex items-center justify-center gap-2 cursor-pointer">
             View Analytics Progress
           </a>
         </div>

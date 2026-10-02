@@ -54,9 +54,12 @@ def create_and_send_otp(db: Session, user: User, purpose: OTPPurpose) -> dict:
             5 if (not is_smtp_configured() or settings.DEMO_MODE)
             else settings.OTP_RESEND_COOLDOWN_SECONDS
         )
-        cooldown_end = existing.last_sent_at.replace(tzinfo=timezone.utc) + timedelta(
-            seconds=cooldown_seconds
+        last_sent = (
+            existing.last_sent_at
+            if (existing.last_sent_at and existing.last_sent_at.tzinfo)
+            else (existing.last_sent_at.replace(tzinfo=timezone.utc) if existing.last_sent_at else now)
         )
+        cooldown_end = last_sent + timedelta(seconds=cooldown_seconds)
         if now < cooldown_end:
             wait_seconds = int((cooldown_end - now).total_seconds())
             raise HTTPException(
@@ -119,14 +122,16 @@ def verify_otp(db: Session, user: User, otp_input: str, purpose: OTPPurpose) -> 
     Verify OTP for given user and purpose.
     Raises HTTPException on invalid, expired, or exhausted attempts.
     Returns True on success. Strictly validates real SHA-256 hash.
+    Provides clear, accurate status messages (expired, already used, or attempts exhausted).
     """
     now = datetime.now(timezone.utc)
+
+    # Query the most recent OTP record for this user and purpose
     otp_record = (
         db.query(OTPVerification)
         .filter(
             OTPVerification.user_id == user.id,
             OTPVerification.purpose == purpose,
-            OTPVerification.is_used == False,
         )
         .order_by(OTPVerification.created_at.desc())
         .first()
@@ -135,15 +140,33 @@ def verify_otp(db: Session, user: User, otp_input: str, purpose: OTPPurpose) -> 
     if not otp_record:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No active verification code found. Please request a new code.",
+            detail="No verification code found. Please request a new code.",
         )
 
-    if otp_record.expires_at.replace(tzinfo=timezone.utc) < now:
-        otp_record.is_used = True
-        db.commit()
+    # Determine timezone-aware UTC datetime for expiration
+    record_expires_at = (
+        otp_record.expires_at
+        if otp_record.expires_at.tzinfo
+        else otp_record.expires_at.replace(tzinfo=timezone.utc)
+    )
+
+    # 15-second grace window to absorb network latency / transit delay
+    grace_delta = timedelta(seconds=15)
+    is_expired = (record_expires_at + grace_delta) < now
+
+    if is_expired:
+        if not otp_record.is_used:
+            otp_record.is_used = True
+            db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Verification code has expired. Please request a new one.",
+            detail="Verification code has expired. Please request a new code.",
+        )
+
+    if otp_record.is_used:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This verification code has already been used. Please request a new code.",
         )
 
     if otp_record.attempts >= settings.OTP_MAX_ATTEMPTS:
@@ -161,7 +184,9 @@ def verify_otp(db: Session, user: User, otp_input: str, purpose: OTPPurpose) -> 
     is_valid = otp_record.otp_hash == _hash_otp(otp_input.strip())
 
     if not is_valid:
-        remaining = settings.OTP_MAX_ATTEMPTS - otp_record.attempts
+        remaining = max(0, settings.OTP_MAX_ATTEMPTS - otp_record.attempts)
+        if remaining == 0:
+            otp_record.is_used = True
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

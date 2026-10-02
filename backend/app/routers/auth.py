@@ -151,6 +151,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         email=user.email,
         demo_otp=demo_otp,
         email_sent=otp_info.get("email_sent", False),
+        expires_in_seconds=otp_info.get("expires_in_seconds", settings.OTP_EXPIRE_MINUTES * 60),
     )
 
 
@@ -219,6 +220,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
             is_registration_verification=True,
             demo_otp=demo_otp,
             email_sent=otp_info.get("email_sent", False),
+            expires_in_seconds=otp_info.get("expires_in_seconds", settings.OTP_EXPIRE_MINUTES * 60),
         )
 
     # Send login OTP
@@ -240,6 +242,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         is_registration_verification=False,
         demo_otp=demo_otp,
         email_sent=otp_info.get("email_sent", False),
+        expires_in_seconds=otp_info.get("expires_in_seconds", settings.OTP_EXPIRE_MINUTES * 60),
     )
 
 
@@ -367,6 +370,7 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
         user_id=str(user.id),
         demo_otp=demo_otp,
         email_sent=otp_info.get("email_sent", True) if otp_info else False,
+        expires_in_seconds=otp_info.get("expires_in_seconds", settings.OTP_EXPIRE_MINUTES * 60) if otp_info else (settings.OTP_EXPIRE_MINUTES * 60),
     )
 
 
