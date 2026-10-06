@@ -49,6 +49,40 @@ const QUICK_ACTIONS = [
   { label: "Step-by-step solver", prefix: "Break this down into exact mathematical/engineering steps with all formulas: ", icon: Layers, color: "text-blue-500" },
 ];
 
+const ALL_PREFIX_STRINGS = [
+  ...EXAM_MARKS.map(m => m.prefix.trim()),
+  ...QUICK_ACTIONS.map(q => q.prefix.trim()),
+];
+
+const PREFIX_REGEX = /^(?:Explain\s+(?:simply\s+)?for\s+\d+\s*marks?|Provide\s+a\s+comprehensive\s+\d+\s*marks?[^:]*|Give\s+a\s+\d+\s*marks?[^:]*|Solve\s+a\s+worked\s+numerical[^:]*|Generate\s+\d+\s+university-standard[^:]*|Give\s+a\s+memorable\s+real-world[^:]*|Break\s+this\s+down[^:]*):\s*/i;
+
+function stripKnownPrefixes(text: string): string {
+  let cleaned = (text || "").trim();
+  let changed = true;
+  while (changed && cleaned.length > 0) {
+    changed = false;
+    // 1. Try regex pattern for mark/prompt prefixes
+    const match = cleaned.match(PREFIX_REGEX);
+    if (match) {
+      cleaned = cleaned.slice(match[0].length).trim();
+      changed = true;
+      continue;
+    }
+    // 2. Try known exact prefixes
+    for (const prefix of ALL_PREFIX_STRINGS) {
+      if (cleaned.toLowerCase().startsWith(prefix.toLowerCase())) {
+        cleaned = cleaned.slice(prefix.length).trim();
+        if (cleaned.startsWith(":")) {
+          cleaned = cleaned.slice(1).trim();
+        }
+        changed = true;
+        break;
+      }
+    }
+  }
+  return cleaned;
+}
+
 const CURATED_PROMPTS_BY_SUBJECT: Record<string, Array<{
   category: string;
   icon: React.ElementType;
@@ -784,22 +818,54 @@ export default function TutorPage() {
   };
 
   const handleQuickAction = (action: typeof QUICK_ACTIONS[0]) => {
-    if (input.trim()) {
-      setInput(`${action.prefix}${input.trim()}`);
-    } else {
-      setInput(action.prefix);
+    if (action.label.includes("2 Marks")) {
+      setSelectedMarkDepth(2);
+    } else if (action.label.includes("5 Marks")) {
+      setSelectedMarkDepth(5);
+    } else if (action.label.includes("10 Marks")) {
+      setSelectedMarkDepth(10);
     }
-    textareaRef.current?.focus();
+
+    const cleaned = stripKnownPrefixes(input);
+    const nextVal = cleaned ? `${action.prefix}${cleaned}` : action.prefix;
+    setInput(nextVal);
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const len = textareaRef.current.value.length;
+        textareaRef.current.setSelectionRange(len, len);
+      }
+    }, 0);
   };
 
   const handleExamMarkPick = (em: typeof EXAM_MARKS[0]) => {
-    setSelectedMarkDepth(em.marks);
-    if (input.trim()) {
-      setInput(`${em.prefix}${input.trim()}`);
-    } else {
-      setInput(em.prefix);
+    // If user clicks the currently active mark pill, toggle it OFF cleanly
+    if (selectedMarkDepth === em.marks) {
+      setSelectedMarkDepth(null);
+      const cleaned = stripKnownPrefixes(input);
+      setInput(cleaned);
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          const len = textareaRef.current.value.length;
+          textareaRef.current.setSelectionRange(len, len);
+        }
+      }, 0);
+      return;
     }
-    textareaRef.current?.focus();
+
+    // Switch to selected mark depth and replace any previous mark prefix cleanly
+    setSelectedMarkDepth(em.marks);
+    const cleaned = stripKnownPrefixes(input);
+    const nextVal = cleaned ? `${em.prefix}${cleaned}` : em.prefix;
+    setInput(nextVal);
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const len = textareaRef.current.value.length;
+        textareaRef.current.setSelectionRange(len, len);
+      }
+    }, 0);
   };
 
   const handleUploadClick = () => {

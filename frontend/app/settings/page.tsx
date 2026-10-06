@@ -85,9 +85,9 @@ function SelectField({
       <label htmlFor={id} className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
         {label}
       </label>
-      <div className="relative">
+      <div className="relative group">
         {Icon && (
-          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none text-slate-400 dark:text-slate-400 z-10">
+          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none text-slate-400 dark:text-slate-400 z-10 transition-colors group-focus-within:text-emerald-500">
             <Icon className="w-4 h-4 flex-shrink-0" />
           </div>
         )}
@@ -97,10 +97,11 @@ function SelectField({
           onChange={(e) => onChange(e.target.value)}
           style={{
             paddingLeft: Icon ? "2.75rem" : "1rem",
-            paddingRight: "2rem",
+            paddingRight: "2.5rem",
+            backgroundImage: "none",
           }}
           className={clsx(
-            "input-field text-sm cursor-pointer [background-image:none] appearance-none text-left",
+            "input-field text-sm cursor-pointer no-arrow !bg-none appearance-none text-left transition-all",
             !value ? "text-slate-400 dark:text-slate-500" : "text-slate-900 dark:text-slate-100"
           )}
         >
@@ -115,7 +116,7 @@ function SelectField({
             </option>
           ))}
         </select>
-        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 dark:text-slate-400 flex items-center justify-center">
+        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 dark:text-slate-400 flex items-center justify-center transition-transform duration-200 group-focus-within:rotate-180 group-focus-within:text-emerald-500">
           <ChevronDown className="w-4 h-4" />
         </div>
       </div>

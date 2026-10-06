@@ -352,9 +352,17 @@ select.input-field {
   background-position: right 0.75rem center;
   background-repeat: no-repeat;
   background-size: 1.125rem 1.125rem;
-  padding-right: 2.25rem !important;
+  padding-right: 2.25rem;
   cursor: pointer;
 }
+
+select.input-field.no-arrow,
+select.input-field.\!bg-none,
+select.input-field[style*="background-image: none"],
+select.input-field[style*="background-image:none"] {
+  background-image: none !important;
+}
+
 
 select option {
   background-color: #0c121e !important;

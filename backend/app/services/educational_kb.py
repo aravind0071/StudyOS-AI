@@ -24,22 +24,30 @@ def check_query_explicit_marks(query: str) -> Optional[int]:
     Matches queries like '2 marks', '2m', 'give 2 answer', 'give me 2 answer', 'for 2',
     '5 marks', '5m', '10 marks', '10m', '16 marks', etc.
     Returns 2, 5, 10, or None if no specific marks was explicitly requested in the query.
+    If multiple mark specifications exist (e.g. prompt prefixes), resolves to the last one.
     """
     q = query.lower()
 
-    # 1. Explicit 2 marks check (handles 'give 2 marks answer', 'give 2 answer', '2m', 'for 2', 'viva note', etc.)
-    if re.search(r"\b(2\s*marks?|two\s*marks?|2m|2\s*answers?|short\s*note|brief\s*def|define\s+briefly|viva\s*note|for\s+2\b|in\s+2\b)\b", q):
-        return 2
+    matches = []
+    # 1. Explicit 2 marks check
+    for m in re.finditer(r"\b(2\s*marks?|two\s*marks?|2m|2\s*answers?|short\s*note|brief\s*def|define\s+briefly|viva\s*note|for\s+2\b|in\s+2\b)\b", q):
+        matches.append((m.start(), 2))
 
     # 2. Explicit 5 marks check
-    if re.search(r"\b(5\s*marks?|five\s*marks?|5m|5\s*answers?|medium\s*answer|for\s+5\b|in\s+5\b)\b", q) and not re.search(r"\b(10|16)\b", q):
-        return 5
+    for m in re.finditer(r"\b(5\s*marks?|five\s*marks?|5m|5\s*answers?|medium\s*answer|for\s+5\b|in\s+5\b)\b", q):
+        if not re.search(r"\b(10|16)\b", q[max(0, m.start() - 5):min(len(q), m.end() + 5)]):
+            matches.append((m.start(), 5))
 
     # 3. Explicit 10 marks / 16 marks check
-    if re.search(r"\b(10\s*marks?|ten\s*marks?|16\s*marks?|10m|16m|10\s*answers?|16\s*answers?|in\s*detail|indetail|comprehensive|full\s*problem|worked\s*problem|master\s*answer|for\s+10\b|in\s+10\b)\b", q):
-        return 10
+    for m in re.finditer(r"\b(10\s*marks?|ten\s*marks?|16\s*marks?|10m|16m|10\s*answers?|16\s*answers?|in\s*detail|indetail|comprehensive|full\s*problem|worked\s*problem|master\s*answer|for\s+10\b|in\s+10\b)\b", q):
+        matches.append((m.start(), 10))
 
-    return None
+    if not matches:
+        return None
+
+    # Sort by start index and return the last specified mark
+    matches.sort(key=lambda x: x[0])
+    return matches[-1][1]
 
 
 def detect_marks(query: str, explain_level: str = "btech_student") -> int:

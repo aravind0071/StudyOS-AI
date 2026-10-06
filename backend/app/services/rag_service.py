@@ -56,11 +56,13 @@ def extract_core_topic_and_terms(query: str) -> tuple[str, list[str]]:
     Handles colon prefixes like 'Explain simply for 5 marks with intuitive real-world analogies: system calls'.
     """
     q_target = query
-    if ":" in query:
-        parts = query.split(":", 1)
+    while ":" in q_target:
+        parts = q_target.split(":", 1)
         after_colon = parts[1].strip()
         if len(after_colon) >= 2:
             q_target = after_colon
+        else:
+            break
 
     clean_q = re.sub(
         r"^(what is|what are|define|explain about|explain simply|explain|describe|tell me about|how does|give an account on|write short notes on|discuss about|discuss|give a|solve a|provide a)\s+",

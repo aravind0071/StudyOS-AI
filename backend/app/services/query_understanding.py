@@ -226,11 +226,13 @@ def extract_topic_and_expansions(query: str) -> dict:
 
     # 1. Extract portion after colon if prompt was structured (e.g., "Explain for 5 marks: system calls")
     q_target = raw
-    if ":" in raw:
-        parts = raw.split(":", 1)
+    while ":" in q_target:
+        parts = q_target.split(":", 1)
         after_colon = parts[1].strip()
         if len(after_colon) >= 2:
             q_target = after_colon
+        else:
+            break
 
     # 2. Strip conversational prefixes and marks boilerplate
     clean_q = re.sub(
