@@ -14,7 +14,8 @@ from app.core.database import engine, Base
 from app.routers import (
     auth, materials, chat, quiz, study_plan,
     interview, analytics, search, profile,
-    subjects, notifications, reminders
+    subjects, notifications, reminders,
+    study_tools, notes
 )
 
 # Configure logging
@@ -118,6 +119,8 @@ app.include_router(profile.router)
 app.include_router(subjects.router)
 app.include_router(notifications.router)
 app.include_router(reminders.router)
+app.include_router(study_tools.router)
+app.include_router(notes.router)
 
 
 # ─── HEALTH CHECK ─────────────────────────────────────────────────────────────

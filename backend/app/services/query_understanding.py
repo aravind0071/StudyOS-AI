@@ -151,6 +151,15 @@ CS_VOCABULARY: Set[str] = {
     "optical", "fiber", "transmission", "medium", "stop", "wait", "parity", "hamming",
     "distance", "b-tree", "b+tree", "hash", "hashing", "collision", "foreign", "primary",
     "key", "keys", "candidate", "super", "join", "joins", "view", "views", "trigger", "triggers",
+    "relational", "relation", "relations", "algebra", "algebraic", "aggregate", "aggregation",
+    "database", "databases", "dbms", "rdbms", "operator", "operators", "query", "queries",
+    "entity", "entities", "attribute", "attributes", "schema", "schemas", "tuple", "tuples",
+    "cardinality", "projection", "selection", "union", "intersect", "minus", "except",
+    "clause", "clauses", "model", "models", "hierarchical", "integrity", "consistency",
+    "isolation", "durability", "redundancy", "atomicity", "serializability", "serializable",
+    "functional", "dependency", "dependencies", "bcnf", "normalization", "observation",
+    "application", "applications", "advantage", "advantages", "management", "conventional",
+    "processing", "difference", "differences", "employee", "student", "information", "exercise",
 }
 
 

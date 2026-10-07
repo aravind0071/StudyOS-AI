@@ -9,12 +9,17 @@ import {
   Trash2, PanelLeftClose, PanelLeft, Clock, RefreshCw,
   ClipboardList, Network, Database, Cpu, Binary,
   Layers, ArrowRight, Search, Bookmark, Zap,
-  Volume2, Pause, AlertTriangle
+  Volume2, Pause, AlertTriangle, Download, Package
 } from "lucide-react";
-import { chatApi, materialsApi, getErrorMessage } from "@/lib/api";
+import { chatApi, materialsApi, notesApi, getErrorMessage } from "@/lib/api";
 import { toast } from "sonner";
 import clsx from "clsx";
 import { MarkdownRenderer } from "@/components/ui/MarkdownRenderer";
+import { ExportChatPdfModal } from "@/components/tutor/ExportChatPdfModal";
+import { RevisionNotesModal } from "@/components/tutor/RevisionNotesModal";
+import { ExamNotesModal } from "@/components/tutor/ExamNotesModal";
+import { StudyPackModal } from "@/components/tutor/StudyPackModal";
+import { ModelPaperModal } from "@/components/tutor/ModelPaperModal";
 
 // ── ACADEMIC CONFIGURATION & DOMAIN DATA ────────────────────────────────────────
 
@@ -333,6 +338,7 @@ function AssistantMessage({
   isSpeakingThis,
   onStopSpeech,
   onRegenerate,
+  onExportPdf,
 }: {
   msg: Message;
   onFollowUp: (prompt: string) => void;
@@ -340,8 +346,10 @@ function AssistantMessage({
   isSpeakingThis: boolean;
   onStopSpeech: () => void;
   onRegenerate?: () => void;
+  onExportPdf?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
   const [rating, setRating] = useState<"up" | "down" | null>(null);
 
   const handleCopy = () => {
@@ -351,9 +359,22 @@ function AssistantMessage({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSaveToNotes = () => {
-    navigator.clipboard.writeText(msg.content);
-    toast.success("Copied to clipboard! Ready to paste into Study Notes.");
+  const handleSaveToNotes = async () => {
+    setSavingNote(true);
+    try {
+      const firstLine = msg.content.split("\n")[0].replace(/[#*`_]/g, "").trim().slice(0, 80) || "Study Notes";
+      await notesApi.create({
+        title: firstLine,
+        content: msg.content,
+        tags: ["tutor-answer", "ai-notes"],
+      });
+      toast.success("Saved directly to Study Notes!");
+    } catch {
+      navigator.clipboard.writeText(msg.content);
+      toast.success("Copied to clipboard! Ready to paste into Study Notes.");
+    } finally {
+      setSavingNote(false);
+    }
   };
 
   return (
@@ -453,12 +474,25 @@ function AssistantMessage({
               <button
                 type="button"
                 onClick={handleSaveToNotes}
+                disabled={savingNote}
                 className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white transition-colors"
                 title="Save this answer to study notes"
               >
-                <Bookmark className="w-3.5 h-3.5 text-teal-500" />
+                {savingNote ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bookmark className="w-3.5 h-3.5 text-teal-500" />}
                 <span className="text-[11px] font-medium hidden sm:inline">Save</span>
               </button>
+
+              {onExportPdf && (
+                <button
+                  type="button"
+                  onClick={onExportPdf}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white transition-colors"
+                  title="Export this answer to A4 Study Notes PDF"
+                >
+                  <FileText className="w-3.5 h-3.5 text-emerald-500" />
+                  <span className="text-[11px] font-medium hidden sm:inline">PDF</span>
+                </button>
+              )}
 
               <div className="h-3 w-px bg-slate-200 dark:bg-white/10 mx-0.5" />
 
@@ -575,6 +609,14 @@ export default function TutorPage() {
 
   // Audio Lecture Speech Synthesis (TTS)
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
+
+  // Student-focused AI features modals
+  const [showExportPdfModal, setShowExportPdfModal] = useState(false);
+  const [exportActiveMsgId, setExportActiveMsgId] = useState<string | undefined>();
+  const [showRevisionNotesModal, setShowRevisionNotesModal] = useState(false);
+  const [showExamNotesModal, setShowExamNotesModal] = useState(false);
+  const [showStudyPackModal, setShowStudyPackModal] = useState(false);
+  const [showModelPaperModal, setShowModelPaperModal] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1244,49 +1286,32 @@ export default function TutorPage() {
               ))}
             </div>
 
-            {/* Depth Selector */}
-            <div className="relative">
+            {/* Quick Export PDF button (when conversation has messages) */}
+            {messages.length > 0 && (
               <button
                 type="button"
-                onClick={() => setShowLevelPicker(v => !v)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-white/[0.12] rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 transition-all shadow-xs"
+                onClick={() => {
+                  setExportActiveMsgId(undefined);
+                  setShowExportPdfModal(true);
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-semibold transition-all shadow-xs"
+                title="Export Chat to Clean A4 Study Notes PDF"
               >
-                <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="hidden sm:inline">{activeLevel?.label}</span>
-                <ChevronDown className="w-3 h-3 text-slate-400" />
+                <Download className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Export PDF</span>
               </button>
+            )}
 
-              {showLevelPicker && (
-                <div className="absolute right-0 top-full mt-1.5 w-60 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.12] rounded-2xl shadow-xl z-30 overflow-hidden py-1 animate-fadeIn">
-                  <div className="px-3 py-1.5 text-[9.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-white/[0.06]">
-                    Academic Reasoning Depth
-                  </div>
-                  {EXPLAIN_LEVELS.map(level => (
-                    <button
-                      key={level.id}
-                      type="button"
-                      onClick={() => {
-                        setExplainLevel(level.id);
-                        setShowLevelPicker(false);
-                        toast.success(`Set to ${level.label} mode.`);
-                      }}
-                      className={clsx(
-                        "w-full text-left px-3 py-2 text-xs transition-colors",
-                        explainLevel === level.id
-                          ? "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 font-bold"
-                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium"
-                      )}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span>{level.label}</span>
-                        {explainLevel === level.id && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
-                      </div>
-                      <div className="text-[9.5px] text-slate-500 font-normal mt-0.5">{level.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Model Paper Solver Button */}
+            <button
+              type="button"
+              onClick={() => setShowModelPaperModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 rounded-xl text-xs font-semibold transition-all shadow-xs hover:shadow-cyan-500/10"
+              title="Upload & Solve Model Question Paper"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Model Paper</span>
+            </button>
 
             {/* Quick Reset Chat */}
             {messages.length > 0 && (
@@ -1330,6 +1355,57 @@ export default function TutorPage() {
               <p className="text-slate-600 dark:text-slate-400 text-xs sm:text-sm max-w-lg mb-4 leading-relaxed">
                 Trained to craft university exam answers, solve step-by-step engineering numericals, and format master solutions for <strong>2 marks</strong>, <strong>5 marks</strong>, or <strong>10 marks</strong> depth.
               </p>
+
+              {/* Fast-Action Student AI Feature Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full max-w-4xl mb-5 text-left">
+                <button
+                  type="button"
+                  onClick={() => setShowRevisionNotesModal(true)}
+                  className="p-3 rounded-xl bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40 transition-all group"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Revision Notes</div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1">Concepts, formulas & 15m recap</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowExamNotesModal(true)}
+                  className="p-3 rounded-xl bg-purple-500/5 hover:bg-purple-500/10 border border-purple-500/20 hover:border-purple-500/40 transition-all group"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-500 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                    <GraduationCap className="w-4 h-4" />
+                  </div>
+                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Exam Notes</div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1">2M, 5M & 10M mark rubrics</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowStudyPackModal(true)}
+                  className="p-3 rounded-xl bg-teal-500/5 hover:bg-teal-500/10 border border-teal-500/20 hover:border-teal-500/40 transition-all group"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-teal-500/10 text-teal-500 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                    <Package className="w-4 h-4" />
+                  </div>
+                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Study Pack</div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1">Notes, Qs, MCQs, Flashcards</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowModelPaperModal(true)}
+                  className="p-3 rounded-xl bg-cyan-500/5 hover:bg-cyan-500/10 border border-cyan-500/20 hover:border-cyan-500/40 transition-all group"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-cyan-500/10 text-cyan-500 flex items-center justify-center mb-1.5 group-hover:scale-105 transition-transform">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Model Paper Solver</div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1">Upload PDF/Image & solve all</div>
+                </button>
+              </div>
 
               {/* Subject Domain Filter Chips */}
               <div className="flex flex-wrap items-center justify-center gap-1.5 mb-5">
@@ -1427,6 +1503,10 @@ export default function TutorPage() {
                     isSpeakingThis={speakingMsgId === msg.id}
                     onStopSpeech={stopSpeech}
                     onRegenerate={() => handleRegenerate(msg)}
+                    onExportPdf={() => {
+                      setExportActiveMsgId(msg.id);
+                      setShowExportPdfModal(true);
+                    }}
                   />
                 )
               )}
@@ -1671,6 +1751,42 @@ export default function TutorPage() {
           </div>
         </div>
       </main>
+
+      {/* ── Student AI Feature Modals ────────────────────────────────────────── */}
+      <ExportChatPdfModal
+        isOpen={showExportPdfModal}
+        onClose={() => setShowExportPdfModal(false)}
+        messages={messages}
+        currentSessionTitle={sessionId ? sessions.find(s => s.id === sessionId)?.title : "Study Notes"}
+        subject={selectedSubject !== "all" ? selectedSubject : "General Engineering"}
+        activeMessageId={exportActiveMsgId}
+      />
+
+      <RevisionNotesModal
+        isOpen={showRevisionNotesModal}
+        onClose={() => setShowRevisionNotesModal(false)}
+        initialTopic={input.trim() || (messages.length > 0 ? messages[messages.length - 1]?.content.slice(0, 80) : "")}
+        subject={selectedSubject !== "all" ? selectedSubject : "Engineering Subject"}
+      />
+
+      <ExamNotesModal
+        isOpen={showExamNotesModal}
+        onClose={() => setShowExamNotesModal(false)}
+        initialTopic={input.trim() || (messages.length > 0 ? messages[messages.length - 1]?.content.slice(0, 80) : "")}
+        subject={selectedSubject !== "all" ? selectedSubject : "Engineering Subject"}
+      />
+
+      <StudyPackModal
+        isOpen={showStudyPackModal}
+        onClose={() => setShowStudyPackModal(false)}
+        defaultSubject={selectedSubject !== "all" ? selectedSubject : "Computer Networks"}
+      />
+
+      <ModelPaperModal
+        isOpen={showModelPaperModal}
+        onClose={() => setShowModelPaperModal(false)}
+        subject={selectedSubject !== "all" ? selectedSubject : "University Examination"}
+      />
     </div>
   );
 }

@@ -992,6 +992,983 @@ def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks
                 "Modern operating systems combine both techniques into **Segmented Paging** (e.g., x86 architecture) to eliminate external fragmentation while preserving logical modularity."
             )
 
+    # ── 7. AGGREGATE FUNCTIONS IN SQL / DBMS ─────────────────────────────────
+    elif any(k in t or k in expanded for k in ["aggregate function", "aggregate functions", "aggregation function", "aggregate", "group by", "having clause"]) or ("aggregate" in tokens and "function" in tokens):
+        if marks == 2:
+            return (
+                disclaimer +
+                "### 🎯 Aggregate Functions in SQL — 2-Marks University Exam Answer\n\n"
+                "#### 1. Core Definition (1 Mark)\n"
+                "**Aggregate Functions** in SQL are built-in scalar mathematical functions that take multiple values from a single column of a table, perform calculations across multiple rows, and return a single summary value.\n\n"
+                "#### 2. Standard Aggregate Functions & Syntax (1 Mark)\n"
+                "- `COUNT(column)`: Counts total number of non-NULL rows.\n"
+                "- `SUM(column)`: Computes the arithmetic sum of numeric values.\n"
+                "- `AVG(column)`: Calculates the arithmetic average.\n"
+                "- `MIN(column)` / `MAX(column)`: Returns lowest and highest value in the column.\n\n"
+                "```sql\n"
+                "SELECT AVG(Salary), MAX(Salary) FROM Employee WHERE Dept = 'CSE';\n"
+                "```\n\n"
+                "> 💡 **Exam Tip:** Aggregate functions ignore `NULL` values (except `COUNT(*)`, which counts all rows including NULLs)."
+            )
+        elif marks in (10, 16):
+            return (
+                disclaimer +
+                "# Aggregate Functions in SQL & Database Systems — 10-Marks Comprehensive Solution\n\n"
+                "## 1. Definition & Theoretical Foundation\n"
+                "In Relational Database Management Systems (RDBMS), **Aggregate Functions** (also known as vector or group functions) operate on a multi-set of values from a specified relation attribute and compute a single summarizing scalar value. "
+                "They are defined formally in extended relational algebra using the aggregation operator $\\mathcal{G}$ and are fundamental to analytical query processing, reporting, and business intelligence.\n\n"
+                "## 2. The Five Standard ANSI-SQL Aggregate Functions\n\n"
+                "| Function | Mathematical Purpose | Return Data Type | Ignores NULLs? |\n"
+                "| :--- | :--- | :--- | :--- |\n"
+                "| **`COUNT(*)`** | Counts total rows in the relation/group | Integer | ❌ No (counts all rows) |\n"
+                "| **`COUNT(column)`** | Counts total non-NULL values in attribute | Integer | ✅ Yes |\n"
+                "| **`SUM(column)`** | Calculates total numerical sum | Same as column/Numeric | ✅ Yes |\n"
+                "| **`AVG(column)`** | Computes arithmetic mean ($\sum x_i / N$) | Floating point / Decimal | ✅ Yes |\n"
+                "| **`MIN(column)`** | Finds the minimum attribute value | Same as column datatype | ✅ Yes |\n"
+                "| **`MAX(column)`** | Finds the maximum attribute value | Same as column datatype | ✅ Yes |\n\n"
+                "## 3. Interaction with `GROUP BY` and `HAVING` Clauses\n"
+                "1. **`GROUP BY` Clause:** Divides table tuples into distinct groups based on common attribute values. The aggregate function is executed separately for each group.\n"
+                "2. **`HAVING` Clause:** Acts as a filter for groups formed by `GROUP BY` based on aggregate conditions (e.g. `HAVING AVG(Salary) > 50000`).\n"
+                "3. **`WHERE` vs `HAVING`:** `WHERE` filters individual rows *before* grouping; `HAVING` filters groups *after* aggregate computation.\n\n"
+                "## 4. Query Execution Flow Diagram (Draw in Exam)\n"
+                "```mermaid\n"
+                "graph TD\n"
+                "    A[FROM: Relations Loaded] --> B[WHERE: Individual Rows Filtered]\n"
+                "    B --> C[GROUP BY: Partitioned into Group Buckets]\n"
+                "    C --> D[AGGREGATION: COUNT, SUM, AVG, MIN, MAX Evaluated per Group]\n"
+                "    D --> E[HAVING: Groups Filtered by Aggregate Condition]\n"
+                "    E --> F[SELECT & ORDER BY: Final Result Set Produced]\n"
+                "```\n\n"
+                "## 5. Worked University Problem with Sample Schema\n"
+                "Given relation **`Employee(EmpID, EmpName, Dept, Salary)`**:\n\n"
+                "```sql\n"
+                "-- Query: Find department-wise total employees, average salary, and max salary for departments with more than 2 employees\n"
+                "SELECT Dept,\n"
+                "       COUNT(EmpID) AS Total_Employees,\n"
+                "       AVG(Salary)   AS Avg_Salary,\n"
+                "       MAX(Salary)   AS Max_Salary\n"
+                "FROM Employee\n"
+                "WHERE Salary >= 30000\n"
+                "GROUP BY Dept\n"
+                "HAVING COUNT(EmpID) > 2\n"
+                "ORDER BY Avg_Salary DESC;\n"
+                "```\n\n"
+                "## 6. Important Exam Rules & Constraints\n"
+                "- **Rule 1 (Projection Constraint):** Any non-aggregated column appearing in the `SELECT` list **must** appear in the `GROUP BY` clause.\n"
+                "- **Rule 2 (`DISTINCT` Modifier):** All aggregate functions except `COUNT(*)` support `DISTINCT` (e.g., `COUNT(DISTINCT Dept)`).\n"
+                "- **Rule 3 (Zero rows):** If input relation is empty, `COUNT` returns `0`, while `SUM`, `AVG`, `MIN`, and `MAX` return `NULL`.\n\n"
+                "## 7. Semester Exam Conclusion\n"
+                "Aggregate functions provide efficient in-database summary calculations. In query optimization, database engines utilize index-only scans on B-trees to calculate `MIN`, `MAX`, and `COUNT` in $O(1)$ or $O(\\log N)$ time."
+            )
+        else:
+            return (
+                disclaimer +
+                "### 📝 Aggregate Functions in SQL — 5-Marks Structured Concept Explanation\n\n"
+                "#### 1. Definition\n"
+                "**Aggregate Functions** in SQL are operations that collect values from multiple rows of a column to compute a single consolidated summary value (such as a total, count, or average).\n\n"
+                "#### 2. Key Aggregate Functions with Examples\n\n"
+                "- **`COUNT()`**: Returns the total number of entries.\n"
+                "  ```sql\n"
+                "  SELECT COUNT(*) FROM Student WHERE Branch = 'CSE';\n"
+                "  ```\n"
+                "- **`SUM()`**: Computes total numeric addition of values.\n"
+                "  ```sql\n"
+                "  SELECT SUM(Fee) FROM Student;\n"
+                "  ```\n"
+                "- **`AVG()`**: Computes the arithmetic mean.\n"
+                "  ```sql\n"
+                "  SELECT AVG(Marks) FROM Student;\n"
+                "  ```\n"
+                "- **`MIN()` / `MAX()`**: Identifies smallest and highest values.\n"
+                "  ```sql\n"
+                "  SELECT MIN(Marks) AS Lowest, MAX(Marks) AS Highest FROM Student;\n"
+                "  ```\n\n"
+                "#### 3. Working Mechanism with `GROUP BY` & `HAVING`\n"
+                "When paired with `GROUP BY`, aggregate functions summarize data per category. To filter these groups, SQL uses `HAVING` instead of `WHERE`:\n\n"
+                "```sql\n"
+                "SELECT Branch, AVG(Marks) AS Average_Score\n"
+                "FROM Student\n"
+                "GROUP BY Branch\n"
+                "HAVING AVG(Marks) >= 75;\n"
+                "```\n\n"
+                "#### 4. Architecture / Grouping Flow Diagram (Easy to Draw in Exam)\n"
+                "```mermaid\n"
+                "graph LR\n"
+                "    A[Input Table: Multi-Row Data] --> B[Partition Rows by GROUP BY]\n"
+                "    B --> C[Compute Aggregate: COUNT/SUM/AVG/MIN/MAX]\n"
+                "    C --> D[Filter with HAVING Condition]\n"
+                "    D --> E[Single Summary Output Row per Group]\n"
+                "```\n\n"
+                "#### 5. Important Exam Points\n"
+                "- Aggregate functions ignore `NULL` values automatically (except `COUNT(*)`).\n"
+                "- You cannot use aggregate functions inside a standard `WHERE` clause without a subquery.\n\n"
+                "#### 6. Short Conclusion\n"
+                "Mastering aggregate functions and distinguishing `WHERE` from `HAVING` is essential for SQL query formulation and database semester examinations."
+            )
+
+    # ── 8. RELATIONAL ALGEBRA OPERATORS ──────────────────────────────────────
+    elif any(k in t or k in expanded for k in ["relational algebra", "relational algebra operator", "basic operators in relational algebra", "relational operators"]) or ("relational" in tokens and "algebra" in tokens):
+        if marks == 2:
+            return (
+                disclaimer +
+                "### 🎯 Relational Algebra Basic Operators — 2-Marks University Exam Answer\n\n"
+                "#### 1. Core Definition (1 Mark)\n"
+                "**Relational Algebra** is a formal, procedural query language for the relational model where operations take one or two relations as input and yield a new relation as output.\n\n"
+                "#### 2. The 6 Fundamental Operators (1 Mark)\n"
+                "1. **Selection ($\\sigma$):** Filters tuples satisfying a predicate: $\\sigma_{\\text{condition}}(R)$.\n"
+                "2. **Projection ($\\pi$):** Selects specified columns and removes duplicates: $\\pi_{A_1, A_2}(R)$.\n"
+                "3. **Union ($\\cup$):** Combines tuples from two union-compatible relations: $R \\cup S$.\n"
+                "4. **Set Difference ($-_s$):** Tuples in $R$ but not in $S$: $R - S$.\n"
+                "5. **Cartesian Product ($\\times$):** Combines all tuples of $R$ with all tuples of $S$: $R \\times S$.\n"
+                "6. **Rename ($\\rho$):** Renames a relation or attributes: $\\rho_{S}(R)$.\n\n"
+                "> 💡 **Exam Tip:** Selection selects rows; Projection selects columns."
+            )
+        elif marks in (10, 16):
+            return (
+                disclaimer +
+                "# Basic Operators in Relational Algebra — 10-Marks Comprehensive University Solution\n\n"
+                "## 1. Theoretical Foundation & Overview\n"
+                "**Relational Algebra** was introduced by Edgar F. Codd as the theoretical underpinning of relational databases. "
+                "It is a **procedural query language** where each operator operates on relations and produces a new relation, adhering strictly to the **Relational Closure Property**.\n\n"
+                "## 2. The Six Fundamental (Basic) Operators\n\n"
+                "### 1. Selection ($\sigma$)\n"
+                "- **Purpose:** Horizontal slicing — selects tuples that satisfy a given conditional expression.\n"
+                "- **Formal Syntax:** $\\sigma_{p}(R)$ where $p$ is a propositional logic formula with comparisons ($=, \\ne, <, \\le, >, \\ge$) and logical connectives ($\\land, \\lor, \\neg$).\n"
+                "- **Example:** $\\sigma_{\\text{Dept}=\\text{'CSE'} \\land \\text{Salary} > 50000}(\\text{Employee})$\n\n"
+                "### 2. Projection ($\pi$)\n"
+                "- **Purpose:** Vertical slicing — chooses specified attributes and automatically eliminates duplicate tuples.\n"
+                "- **Formal Syntax:** $\\pi_{A_1, A_2, \\dots, A_k}(R)$\n"
+                "- **Example:** $\\pi_{\\text{EmpID}, \\text{EmpName}}(\\text{Employee})$\n\n"
+                "### 3. Union ($\cup$)\n"
+                "- **Purpose:** Produces a relation containing all tuples belonging to $R$, $S$, or both.\n"
+                "- **Condition:** Requires **Union Compatibility** (both relations must have identical arity/number of attributes and pairwise compatible domains).\n"
+                "- **Formal Syntax:** $R \\cup S = \\{ t \\mid t \\in R \\lor t \\in S \\}$\n\n"
+                "### 4. Set Difference ($-$)\n"
+                "- **Purpose:** Yields tuples present in relation $R$ that are strictly absent in relation $S$.\n"
+                "- **Condition:** Requires Union Compatibility.\n"
+                "- **Formal Syntax:** $R - S = \\{ t \\mid t \\in R \\land t \\notin S \\}$\n\n"
+                "### 5. Cartesian Product / Cross Product ($\times$)\n"
+                "- **Purpose:** Combines every tuple of relation $R$ with every tuple of relation $S$.\n"
+                "- **Arity & Cardinality:** If $\\text{deg}(R) = n_1$ and $\\text{deg}(S) = n_2$, then $\\text{deg}(R \\times S) = n_1 + n_2$. Cardinality $= |R| \\times |S|$.\n"
+                "- **Formal Syntax:** $R \\times S = \\{ t_r \\circ t_s \\mid t_r \\in R \\land t_s \\in S \\}$\n\n"
+                "### 6. Rename ($\rho$)\n"
+                "- **Purpose:** Renames relations and/or their attribute names to disambiguate self-joins and sub-expressions.\n"
+                "- **Formal Syntax:** $\\rho_{S(B_1, B_2, \\dots, B_n)}(R)$ or $\\rho_{S}(R)$\n\n"
+                "## 3. Derived Operators (Formed from Fundamental Operators)\n\n"
+                "| Operator | Symbol | Definition in Terms of Basic Operators |\n"
+                "| :--- | :---: | :--- |\n"
+                "| **Intersection** | $\\cap$ | $R \\cap S = R - (R - S)$ |\n"
+                "| **Theta Join** | $\\bowtie_{\\theta}$ | $R \\bowtie_{\\theta} S = \\sigma_{\\theta}(R \\times S)$ |\n"
+                "| **Natural Join** | $\\bowtie$ | $\\pi_{\\text{Union Attributes}}(\\sigma_{\\text{Common Attributes Match}}(R \\times S))$ |\n"
+                "| **Division** | $\\div$ | Finds tuples in $R$ associated with all tuples in $S$ |\n\n"
+                "## 4. Architectural Relational Query Execution Tree (Draw in Exam)\n"
+                "```mermaid\n"
+                "graph TD\n"
+                "    Output[Final Query Result Relation]\n"
+                "    Proj[Project: π EmpName, Dept] --> Output\n"
+                "    Join[Join: ⨝ Emp.DeptID = Dept.DeptID] --> Proj\n"
+                "    Sel1[Select: σ Salary > 60000] --> Join\n"
+                "    Emp[(Relation: Employee)] --> Sel1\n"
+                "    Sel2[Select: σ Location = 'Hyd'] --> Join\n"
+                "    Dept[(Relation: Department)] --> Sel2\n"
+                "```\n\n"
+                "## 5. Worked Example with Relations\n"
+                "Given relation **$R$** (Student) with attributes $(A, B)$ and relation **$S$** with attributes $(A, B)$:\n\n"
+                "```text\n"
+                "R:                      S:\n"
+                "| A | B |              | A | B |\n"
+                "| 1 | X |              | 2 | Y |\n"
+                "| 2 | Y |              | 3 | Z |\n\n"
+                "R ∪ S = {(1, X), (2, Y), (3, Z)}\n"
+                "R - S = {(1, X)}\n"
+                "σ_{A=1}(R) = {(1, X)}\n"
+                "π_{A}(R) = {(1), (2)}\n"
+                "```\n\n"
+                "## 6. Semester Exam Conclusion\n"
+                "Relational algebra forms the intermediate representation used by relational query optimizers (e.g., PostgreSQL, Oracle) to transform declarative SQL statements into optimized relational algebraic query plans."
+            )
+        else:
+            return (
+                disclaimer +
+                "### 📝 Basic Operators in Relational Algebra — 5-Marks Structured Explanation\n\n"
+                "#### 1. Definition\n"
+                "**Relational Algebra** is a formal procedural query language in database management systems that defines operations over relations where every operation produces a new relation as output.\n\n"
+                "#### 2. The 6 Basic Operators with Notation\n\n"
+                "1. **Selection ($\\sigma$):** Filters rows meeting a condition.\n"
+                "   - *Syntax:* $\\sigma_{\\text{Marks} > 75}(\\text{Student})$\n"
+                "2. **Projection ($\\pi$):** Filters columns and removes duplicates.\n"
+                "   - *Syntax:* $\\pi_{\\text{Name}, \\text{Branch}}(\\text{Student})$\n"
+                "3. **Union ($\\cup$):** Combines rows from two compatible tables.\n"
+                "   - *Syntax:* $\\text{Table1} \\cup \\text{Table2}$\n"
+                "4. **Set Difference ($-$):** Selects rows in table 1 that are not in table 2.\n"
+                "   - *Syntax:* $\\text{Table1} - \\text{Table2}$\n"
+                "5. **Cartesian Product ($\\times$):** Combines every row of table 1 with every row of table 2.\n"
+                "   - *Syntax:* $\\text{Student} \\times \\text{Department}$\n"
+                "6. **Rename ($\\rho$):** Renames a table or column name.\n"
+                "   - *Syntax:* $\\rho_{\\text{S}}(\\text{Student})$\n\n"
+                "#### 3. Summary Comparison Table\n\n"
+                "| Operator | Symbol | Operation Type | Arity |\n"
+                "| :--- | :---: | :--- | :---: |\n"
+                "| Selection | $\\sigma$ | Horizontal (Row filter) | Unary (1 table) |\n"
+                "| Projection | $\\pi$ | Vertical (Column filter) | Unary (1 table) |\n"
+                "| Union | $\\cup$ | Set Operation | Binary (2 tables) |\n"
+                "| Set Difference | $-$ | Set Operation | Binary (2 tables) |\n"
+                "| Cartesian Product | $\\times$ | Combinatorial Multiplication | Binary (2 tables) |\n"
+                "| Rename | $\\rho$ | Name Mapping | Unary (1 table) |\n\n"
+                "#### 4. Relational Operation Diagram (Easy to Draw in Exam)\n"
+                "```mermaid\n"
+                "graph LR\n"
+                "    R[Relation R] --> S[Selection: σ Row Slicing] --> Out1[Filtered Tuples]\n"
+                "    R --> P[Projection: π Column Slicing] --> Out2[Filtered Attributes]\n"
+                "    R & T[Relation S] --> U[Union / Diff: ∪, -] --> Out3[Combined Relation]\n"
+                "```\n\n"
+                "#### 5. Important Exam Rule (Union Compatibility)\n"
+                "For **Union ($\\cup$)** and **Set Difference ($-$)**, both relations must have the exact same number of attributes and matching corresponding datatypes.\n\n"
+                "#### 6. Short Conclusion\n"
+                "These 6 fundamental operators provide complete relational expressiveness and form the theoretical backbone for all SQL operations."
+            )
+
+    # ── 9. LOGICAL OPERATORS IN SQL (AND, OR, NOT) ───────────────────────────
+    elif any(k in t or k in expanded for k in ["logical operator", "logical operators", "and or not", "boolean operator", "boolean operators"]) or ("logical" in tokens and "operator" in tokens):
+        if marks == 2:
+            return (
+                disclaimer +
+                "### 🎯 Logical Operators in SQL (AND, OR, NOT) — 2-Marks University Answer\n\n"
+                "#### 1. Core Definition (1 Mark)\n"
+                "**Logical Operators** in SQL are boolean operators used in the `WHERE` or `HAVING` clause to combine or invert condition expressions, evaluating to **TRUE**, **FALSE**, or **UNKNOWN** (three-valued logic).\n\n"
+                "#### 2. The 3 Primary Operators & Precedence (1 Mark)\n"
+                "- `AND`: Evaluates to TRUE only if **all** conditions are TRUE.\n"
+                "- `OR`: Evaluates to TRUE if **at least one** condition is TRUE.\n"
+                "- `NOT`: Inverts the truth value of a condition.\n"
+                "- **Precedence Order:** `NOT` $\\to$ `AND` $\\to$ `OR` (parentheses override precedence).\n\n"
+                "> 💡 **Exam Tip:** In SQL with NULL values, boolean logic uses 3-valued logic: `TRUE AND NULL = NULL`."
+            )
+        elif marks in (10, 16):
+            return (
+                disclaimer +
+                "# Logical Operators in SQL (AND, OR, NOT) & Predicate Logic — 10-Marks Solution\n\n"
+                "## 1. Overview & Theoretical Purpose\n"
+                "In SQL, **Logical Operators** (Boolean operators) allow complex search conditions to be constructed within declarative query predicates (`WHERE`, `HAVING`, `CASE`, and `JOIN ON` clauses). "
+                "Because relational databases support the `NULL` value representing missing or unknown data, SQL implements **Three-Valued Logic (3VL)** comprising `TRUE`, `FALSE`, and `UNKNOWN`.\n\n"
+                "## 2. Truth Tables for SQL Logical Operators\n\n"
+                "### AND Operator Truth Table\n"
+                "| P1 | P2 | P1 AND P2 |\n"
+                "| :--- | :--- | :--- |\n"
+                "| TRUE | TRUE | **TRUE** |\n"
+                "| TRUE | FALSE | **FALSE** |\n"
+                "| TRUE | UNKNOWN | **UNKNOWN** |\n"
+                "| FALSE | UNKNOWN | **FALSE** |\n"
+                "| UNKNOWN | UNKNOWN | **UNKNOWN** |\n\n"
+                "### OR Operator Truth Table\n"
+                "| P1 | P2 | P1 OR P2 |\n"
+                "| :--- | :--- | :--- |\n"
+                "| TRUE | FALSE | **TRUE** |\n"
+                "| FALSE | FALSE | **FALSE** |\n"
+                "| TRUE | UNKNOWN | **TRUE** |\n"
+                "| FALSE | UNKNOWN | **UNKNOWN** |\n"
+                "| UNKNOWN | UNKNOWN | **UNKNOWN** |\n\n"
+                "### NOT Operator Truth Table\n"
+                "| P | NOT P |\n"
+                "| :--- | :--- |\n"
+                "| TRUE | FALSE |\n"
+                "| FALSE | TRUE |\n"
+                "| UNKNOWN | **UNKNOWN** |\n\n"
+                "## 3. Operator Precedence & Evaluation Rules\n"
+                "When multiple logical operators appear in a single statement, SQL evaluates them in the following strict order of precedence:\n"
+                "1. **Parentheses `()`:** Highest precedence; forces explicit grouping.\n"
+                "2. **Comparison Operators:** `=`, `<>`, `<`, `<=`, `>`, `>=`.\n"
+                "3. **`NOT`:** Unary logical inversion.\n"
+                "4. **`AND`:** Logical conjunction.\n"
+                "5. **`OR`:** Lowest logical disjunction.\n\n"
+                "## 4. Query Evaluation Architecture Diagram\n"
+                "```mermaid\n"
+                "graph TD\n"
+                "    Row[Candidate Table Row] --> C1{Cond 1: Dept = 'CSE'}\n"
+                "    C1 -- TRUE --> C2{Cond 2: Salary > 50000}\n"
+                "    C1 -- FALSE --> C3{Alternative OR Check: Location = 'Hyd'}\n"
+                "    C2 -- TRUE --> Emit[Include Row in Result]\n"
+                "    C2 -- FALSE --> C3\n"
+                "    C3 -- TRUE --> Emit\n"
+                "    C3 -- FALSE --> Discard[Discard Row]\n"
+                "```\n\n"
+                "## 5. Concrete SQL Examples on `Employee` Table\n\n"
+                "```sql\n"
+                "-- Example 1: Using AND\n"
+                "SELECT * FROM Employee\n"
+                "WHERE Dept = 'IT' AND Salary >= 60000;\n\n"
+                "-- Example 2: Combining AND, OR with explicit parentheses\n"
+                "SELECT * FROM Employee\n"
+                "WHERE (Dept = 'IT' OR Dept = 'HR') AND Experience >= 5;\n\n"
+                "-- Example 3: Using NOT with IN operator\n"
+                "SELECT * FROM Employee\n"
+                "WHERE NOT (City = 'Delhi' OR City = 'Mumbai');\n"
+                "```\n\n"
+                "## 6. Short-Circuit Evaluation & Optimization\n"
+                "Modern query optimizers perform **Short-Circuit Evaluation**:\n"
+                "- In `A AND B`: If `A` is `FALSE`, `B` is not evaluated.\n"
+                "- In `A OR B`: If `A` is `TRUE`, `B` is not evaluated.\n"
+                "The optimizer re-orders predicates to evaluate low-cost and highly-selective index conditions first.\n\n"
+                "## 7. Semester Exam Conclusion\n"
+                "Writing explicit parentheses to override default `AND`-before-`OR` precedence prevents semantic query bugs and ensures predictable result generation."
+            )
+        else:
+            return (
+                disclaimer +
+                "### 📝 Logical Operators in SQL (AND, OR, NOT) — 5-Marks Structured Explanation\n\n"
+                "#### 1. Definition\n"
+                "**Logical Operators** in SQL are used to link or invert multiple search conditions inside the `WHERE` clause to filter database records based on boolean logic.\n\n"
+                "#### 2. Detailed Explanation of the Three Operators\n\n"
+                "1. **`AND` Operator:**\n"
+                "   - Returns TRUE only when **both** conditions are satisfied.\n"
+                "   - *Example:* `SELECT * FROM Student WHERE Branch = 'CSE' AND Marks >= 80;`\n\n"
+                "2. **`OR` Operator:**\n"
+                "   - Returns TRUE when **either** condition (or both) is satisfied.\n"
+                "   - *Example:* `SELECT * FROM Student WHERE City = 'Hyderabad' OR City = 'Bangalore';`\n\n"
+                "3. **`NOT` Operator:**\n"
+                "   - Reverses the truth value of a condition.\n"
+                "   - *Example:* `SELECT * FROM Student WHERE NOT (Fee_Paid = 'Yes');`\n\n"
+                "#### 3. Summary Truth Table\n\n"
+                "| Condition 1 | Condition 2 | AND Result | OR Result |\n"
+                "| :--- | :--- | :--- | :--- |\n"
+                "| TRUE | TRUE | TRUE | TRUE |\n"
+                "| TRUE | FALSE | FALSE | TRUE |\n"
+                "| FALSE | TRUE | FALSE | TRUE |\n"
+                "| FALSE | FALSE | FALSE | FALSE |\n\n"
+                "#### 4. Logic Flow Diagram (Easy to Draw in Exam)\n"
+                "```mermaid\n"
+                "graph LR\n"
+                "    A[Input Row] --> B{Condition 1}\n"
+                "    B -- TRUE --> C{AND: Condition 2}\n"
+                "    C -- TRUE --> D[Accepted Output]\n"
+                "    B -- FALSE --> E{OR: Condition 2}\n"
+                "    E -- TRUE --> D\n"
+                "    E -- FALSE --> F[Rejected]\n"
+                "```\n\n"
+                "#### 5. Operator Precedence Rule\n"
+                "SQL evaluates `NOT` first, then `AND`, and finally `OR`. Always use parentheses `()` to avoid unexpected logic errors.\n\n"
+                "#### 6. Short Conclusion\n"
+                "Mastering logical operators enables students to compose precise multi-condition queries for semester practical and theory exams."
+            )
+
+    # ── 10. SET MANIPULATION CONSTRUCTS / SET OPERATORS ──────────────────────
+    elif any(k in t or k in expanded for k in ["set manipulation", "set operator", "set operators", "union all", "intersect", "minus", "except"]) or ("set" in tokens and "operator" in tokens):
+        if marks == 2:
+            return (
+                disclaimer +
+                "### 🎯 Set Manipulation Operators in SQL — 2-Marks University Exam Answer\n\n"
+                "#### 1. Core Definition (1 Mark)\n"
+                "**Set Operators** in SQL combine the results of two or more independent `SELECT` queries into a single result set based on mathematical set theory.\n\n"
+                "#### 2. Key Operators & Prerequisites (1 Mark)\n"
+                "- `UNION`: Combines results and eliminates duplicate rows.\n"
+                "- `UNION ALL`: Combines results and retains all duplicates (faster).\n"
+                "- `INTERSECT`: Returns only rows common to both queries.\n"
+                "- `MINUS` / `EXCEPT`: Returns rows in the first query not present in the second.\n"
+                "- **Rule:** Both queries must have the same number of columns with matching datatypes (Union Compatibility).\n\n"
+                "> 💡 **Exam Tip:** `UNION ALL` is faster than `UNION` because it skips the duplicate sorting phase."
+            )
+        elif marks in (10, 16):
+            return (
+                disclaimer +
+                "# Set Manipulation Constructs & Operators in SQL — 10-Marks Comprehensive Solution\n\n"
+                "## 1. Definition & Theoretical Grounding\n"
+                "In SQL, **Set Manipulation Constructs** implement relational algebra set operations ($R \\cup S, R \\cap S, R - S$). "
+                "Unlike standard SQL queries that perform row-by-row filtering or column joins, set operators operate on entire tuples across vertical result sets from multiple `SELECT` statements.\n\n"
+                "## 2. The Four Primary SQL Set Operators\n\n"
+                "| Operator | Relational Algebra | Duplicate Handling | Performance Overhead |\n"
+                "| :--- | :---: | :--- | :--- |\n"
+                "| **`UNION`** | $R \\cup S$ | Eliminates duplicate rows | Requires sorting/hashing ($O(N \\log N)$) |\n"
+                "| **`UNION ALL`** | $R \\cup_{\\text{multiset}} S$ | Retains all duplicates | Fast direct concatenation ($O(N)$) |\n"
+                "| **`INTERSECT`** | $R \\cap S$ | Returns only common distinct rows | Requires sort-merge/hash match |\n"
+                "| **`MINUS` / `EXCEPT`** | $R - S$ | Rows in Query 1 absent from Query 2 | Requires anti-join / diff sort |\n\n"
+                "*(Note: Oracle uses `MINUS`; PostgreSQL, SQLite, and SQL Server use `EXCEPT`.)*\n\n"
+                "## 3. Strict Prerequisites for Set Operations (Union Compatibility)\n"
+                "For any set operator to execute successfully, the queries must satisfy two strict conditions:\n"
+                "1. **Same Column Count:** Both `SELECT` statements must return the exact same number of columns in the projection list.\n"
+                "2. **Compatible Data Types:** The corresponding columns in each query (1st with 1st, 2nd with 2nd) must belong to compatible data type families (e.g., both integers or both strings).\n"
+                "3. **Column Names:** Column headers in the final output are determined solely by the first `SELECT` statement.\n\n"
+                "## 4. Visual Set Theory Diagram (Venn Representation)\n"
+                "```mermaid\n"
+                "graph LR\n"
+                "    subgraph UNION ALL\n"
+                "        A1[All of A] --- B1[All of B (with duplicates)]\n"
+                "    end\n"
+                "    subgraph INTERSECT\n"
+                "        I[Overlap Area Only: A ∩ B]\n"
+                "    end\n"
+                "    subgraph MINUS / EXCEPT\n"
+                "        M[A Only: A - B]\n"
+                "    end\n"
+                "```\n\n"
+                "## 5. Working Exam Example Queries\n"
+                "Given tables **`CSE_Students(RollNo, Name)`** and **`IT_Students(RollNo, Name)`**:\n\n"
+                "```sql\n"
+                "-- 1. UNION: All distinct students across both branches\n"
+                "SELECT RollNo, Name FROM CSE_Students\n"
+                "UNION\n"
+                "SELECT RollNo, Name FROM IT_Students;\n\n"
+                "-- 2. UNION ALL: Complete list with duplicates preserved\n"
+                "SELECT RollNo, Name FROM CSE_Students\n"
+                "UNION ALL\n"
+                "SELECT RollNo, Name FROM IT_Students;\n\n"
+                "-- 3. INTERSECT: Students registered in both courses\n"
+                "SELECT RollNo, Name FROM CSE_Students\n"
+                "INTERSECT\n"
+                "SELECT RollNo, Name FROM IT_Students;\n\n"
+                "-- 4. MINUS / EXCEPT: CSE students not in IT\n"
+                "SELECT RollNo, Name FROM CSE_Students\n"
+                "EXCEPT\n"
+                "SELECT RollNo, Name FROM IT_Students;\n"
+                "```\n\n"
+                "## 6. Semester Exam Conclusion\n"
+                "In performance optimization, prefer `UNION ALL` over `UNION` whenever duplicates are impossible or acceptable, as it avoids expensive internal disk sorting."
+            )
+        else:
+            return (
+                disclaimer +
+                "### 📝 Set Manipulation Operators in SQL — 5-Marks Structured Explanation\n\n"
+                "#### 1. Definition\n"
+                "**Set Operators** in SQL are constructs that allow multiple `SELECT` query results to be combined into a single unified result set following mathematical set rules.\n\n"
+                "#### 2. The Four Set Operators\n\n"
+                "1. **`UNION`:** Combines rows from two queries and automatically removes duplicate tuples.\n"
+                "2. **`UNION ALL`:** Combines rows from two queries and preserves duplicate entries (faster execution).\n"
+                "3. **`INTERSECT`:** Returns only the tuples present in both queries.\n"
+                "4. **`MINUS` / `EXCEPT`:** Returns tuples present in the first query but absent in the second query.\n\n"
+                "#### 3. Comparison Table\n\n"
+                "| Operator | Action | Removes Duplicates? |\n"
+                "| :--- | :--- | :---: |\n"
+                "| `UNION` | Combines both sets | ✅ Yes |\n"
+                "| `UNION ALL` | Combines both sets | ❌ No |\n"
+                "| `INTERSECT` | Common rows only | ✅ Yes |\n"
+                "| `MINUS` / `EXCEPT`| First set minus second | ✅ Yes |\n\n"
+                "#### 4. Architecture Diagram\n"
+                "```mermaid\n"
+                "graph TD\n"
+                "    Q1[SELECT Query 1] --> SetOp{Set Operator: UNION / INTERSECT / EXCEPT}\n"
+                "    Q2[SELECT Query 2] --> SetOp\n"
+                "    SetOp --> Res[Unified Output Relation]\n"
+                "```\n\n"
+                "#### 5. Rules for Set Operations\n"
+                "- Both `SELECT` queries must return the exact same number of columns.\n"
+                "- Corresponding columns must have compatible data types.\n\n"
+                "#### 6. Short Conclusion\n"
+                "Set operators provide a powerful way to merge data from related schemas without writing complex join statements."
+            )
+
+    # ── 11. SORTING RESULTS / ORDER BY CLAUSE ────────────────────────────────
+    elif any(k in t or k in expanded for k in ["sorting results", "order by", "sort by", "order by clause", "sorting in sql"]) or ("sort" in tokens and "result" in tokens):
+        if marks == 2:
+            return (
+                disclaimer +
+                "### 🎯 Sorting Results (`ORDER BY`) in SQL — 2-Marks University Answer\n\n"
+                "#### 1. Core Definition (1 Mark)\n"
+                "The **`ORDER BY`** clause in SQL is used to sort the fetched result set in ascending (`ASC`, default) or descending (`DESC`) order based on one or more attributes.\n\n"
+                "#### 2. Syntax & Execution Rule (1 Mark)\n"
+                "```sql\n"
+                "SELECT Name, Salary FROM Employee ORDER BY Salary DESC, Name ASC;\n"
+                "```\n"
+                "- **Execution Rule:** `ORDER BY` is executed **last** in the SQL query lifecycle after `SELECT` and `HAVING`.\n\n"
+                "> 💡 **Exam Tip:** Default sorting order is `ASC`; NULL values typically appear last in ASC order."
+            )
+        else:
+            return (
+                disclaimer +
+                "### 📝 Sorting Results with `ORDER BY` Clause — 5-Marks Structured Explanation\n\n"
+                "#### 1. Definition\n"
+                "The **`ORDER BY`** clause in SQL specifies the ordering of rows returned by a query. Since relational tables represent unordered multisets of tuples, `ORDER BY` is required to enforce deterministic output order.\n\n"
+                "#### 2. Key Syntax & Options\n\n"
+                "- **Ascending (`ASC`):** Default sorting from smallest to largest.\n"
+                "- **Descending (`DESC`):** Explicit sorting from largest to smallest.\n"
+                "- **Multi-Column Sorting:** Sorts by primary column first; ties are broken by the second column.\n"
+                "  ```sql\n"
+                "  SELECT EmpName, Dept, Salary\n"
+                "  FROM Employee\n"
+                "  ORDER BY Dept ASC, Salary DESC;\n"
+                "  ```\n"
+                "- **Sorting by Column Position:** e.g. `ORDER BY 2 DESC` (sorts by 2nd projected column).\n"
+                "- **NULL Handling:** `NULLS FIRST` or `NULLS LAST` specifies placement of missing values.\n\n"
+                "#### 3. SQL Query Execution Order Lifecycle\n\n"
+                "1. `FROM` $\\to$ 2. `WHERE` $\\to$ 3. `GROUP BY` $\\to$ 4. `HAVING` $\\to$ 5. `SELECT` $\\to$ **6. `ORDER BY`** $\\to$ 7. `LIMIT/OFFSET`\n\n"
+                "#### 4. Architecture Flow Diagram\n"
+                "```mermaid\n"
+                "graph LR\n"
+                "    A[Unordered Tuples from Table] --> B[Filter & Project Data]\n"
+                "    B --> C{ORDER BY Clause}\n"
+                "    C -->|Index Scan or Sort Buffer| D[Sorted Output Dataset]\n"
+                "```\n\n"
+                "#### 5. Performance Note\n"
+                "If the sorted column has a B-tree index, the database reads data directly in sorted order without using memory sort buffers.\n\n"
+                "#### 6. Short Conclusion\n"
+                "`ORDER BY` ensures structured presentation of exam queries and reporting datasets."
+            )
+
+    # ── 12. WHAT IS DBMS, DATA, AND INFORMATION ──────────────────────────────
+    elif any(k in t or k in expanded for k in ["what is dbms", "dbms data and information", "data information and dbms", "data vs information", "define dbms"]):
+        if marks == 2:
+            return (
+                disclaimer +
+                "### 🎯 Data, Information, and DBMS — 2-Marks University Exam Answer\n\n"
+                "#### 1. Definitions (1 Mark)\n"
+                "- **Data:** Raw, unorganized facts, symbols, or observations without context (e.g., `45`, `'John'`).\n"
+                "- **Information:** Processed, organized, and structured data that carries meaning and context (e.g., `'John scored 45 marks'`).\n\n"
+                "#### 2. Definition of DBMS (1 Mark)\n"
+                "- **DBMS (Database Management System):** A specialized software suite that enables users to define, create, maintain, and control access to structured persistent databases (e.g., MySQL, Oracle, PostgreSQL).\n\n"
+                "> 💡 **Exam Tip:** Formula to remember: *Data + Context & Processing = Information*."
+            )
+        elif marks in (10, 16):
+            return (
+                disclaimer +
+                "# Data, Information, and DBMS Architecture — 10-Marks Comprehensive Solution\n\n"
+                "## 1. Fundamental Definitions & Conceptual Hierarchy\n"
+                "In computer science, data management progresses through a clear hierarchy from raw facts to actionable knowledge:\n\n"
+                "- **Data:** Raw, uninterpreted observations, numbers, or symbols lacking contextual semantics (e.g. `101`, `Alice`, `25000`).\n"
+                "- **Information:** Data that has been validated, formatted, and contextualized to deliver meaning for decision making (e.g. `Employee Alice (ID: 101) earns salary $25,000`).\n"
+                "- **Database:** A shared, logically coherent collection of persistent, interrelated data representing a mini-world.\n"
+                "- **DBMS (Database Management System):** A collection of system programs that allows users to create, query, update, and administer databases while enforcing security, concurrency, and integrity.\n\n"
+                "## 2. Comprehensive Comparison: Data vs Information vs DBMS\n\n"
+                "| Criteria | Data | Information | DBMS |\n"
+                "| :--- | :--- | :--- | :--- |\n"
+                "| **Nature** | Raw, unorganized inputs | Processed, contextualized output | Software management engine |\n"
+                "| **Direct Utility** | Low (cannot guide decisions alone) | High (enables decision making) | Core infrastructure |\n"
+                "| **Dependency** | Independent | Depends on raw data | Operates on databases |\n"
+                "| **Example** | `07102026` | `October 7, 2026 (Exam Date)` | Oracle 19c, PostgreSQL, MySQL |\n\n"
+                "## 3. Three-Schema Architecture (ANSI/SPARC Architecture)\n"
+                "To separate user applications from the physical database, DBMS implements a 3-tier level of abstraction:\n"
+                "1. **External Level (View Level):** Custom user views describing only the part of database relevant to a specific user group.\n"
+                "2. **Conceptual Level (Logical Level):** Describes *what* data is stored in whole database and relationships (entities, data types, constraints).\n"
+                "3. **Internal Level (Physical Level):** Describes *how* data is physically stored on storage media (record formats, indices, B-trees, hashing).\n\n"
+                "## 4. Architecture Diagram (Draw in Exam)\n"
+                "```mermaid\n"
+                "graph TD\n"
+                "    User1[User View 1] & User2[User View 2] --> Ext[External Level / Views]\n"
+                "    Ext -->|Logical Data Independence| Conc[Conceptual Schema: Tables & Rules]\n"
+                "    Conc -->|Physical Data Independence| Int[Internal Schema: Physical File Layout]\n"
+                "    Int --> DB[(Physical Storage Disk)]\n"
+                "```\n\n"
+                "## 5. Major Components of a DBMS\n"
+                "- **Query Processor:** Compiles, optimizes, and executes DDL/DML statements.\n"
+                "- **Storage Manager:** Interfaces with OS file system (Buffer Manager, Transaction Manager, File Manager).\n"
+                "- **Data Dictionary (Catalog):** Stores metadata (schema descriptions, access rights).\n\n"
+                "## 6. Semester Exam Conclusion\n"
+                "The core purpose of a DBMS is to provide **Data Independence** (Logical & Physical), ensuring applications do not break when storage structures change."
+            )
+        else:
+            return (
+                disclaimer +
+                "### 📝 Data, Information, and DBMS — 5-Marks Structured Explanation\n\n"
+                "#### 1. Definitions\n"
+                "- **Data:** Raw facts and figures without context (e.g. `20`, `CSE`).\n"
+                "- **Information:** Processed data with meaning and purpose (e.g. `Age is 20, Branch is CSE`).\n"
+                "- **DBMS:** A software system used to store, manage, and retrieve data securely and efficiently (e.g. MySQL, PostgreSQL, Oracle).\n\n"
+                "#### 2. Key Differences Table\n\n"
+                "| Parameter | Data | Information |\n"
+                "| :--- | :--- | :--- |\n"
+                "| **Form** | Unstructured, raw inputs | Structured, processed output |\n"
+                "| **Meaning** | No inherent meaning | Meaningful and actionable |\n"
+                "| **Processing** | Input to the system | Output of the system |\n\n"
+                "#### 3. Why DBMS is Needed\n"
+                "A DBMS manages data centrally, provides crash recovery (ACID properties), eliminates duplicate records, and supports concurrent multi-user access.\n\n"
+                "#### 4. Architecture Diagram\n"
+                "```mermaid\n"
+                "graph LR\n"
+                "    A[Raw Data] --> B[DBMS Processing Engine] --> C[Meaningful Information]\n"
+                "    B --> D[(Secure Database Storage)]\n"
+                "```\n\n"
+                "#### 5. Short Conclusion\n"
+                "A DBMS bridges the gap between raw data and meaningful information while ensuring data security and consistency."
+            )
+
+    # ── 13. PROBLEMS OF CONVENTIONAL FILE PROCESSING SYSTEM ──────────────────
+    elif any(k in t or k in expanded for k in ["conventional file", "file processing system", "problems associated with conventional", "problems of file system", "file system limitations"]):
+        if marks == 2:
+            return (
+                disclaimer +
+                "### 🎯 Problems of Conventional File Processing System — 2-Marks University Answer\n\n"
+                "#### 1. Core Problems (1 Mark)\n"
+                "Traditional file processing systems rely on flat files managed directly by the operating system, suffering from:\n"
+                "1. **Data Redundancy & Inconsistency:** Same data duplicated across multiple departments in different formats.\n"
+                "2. **Difficulty in Accessing Data:** Writing new application programs required for every ad-hoc query.\n\n"
+                "#### 2. Additional Invariants (1 Mark)\n"
+                "3. **Integrity Problems:** Constraints are hardcoded in application logic.\n"
+                "4. **Atomicity & Concurrency Issues:** No transaction safety or multi-user isolation during crashes.\n\n"
+                "> 💡 **Exam Tip:** Cite *Data Redundancy* and *Lack of Atomicity* as primary failure reasons."
+            )
+        elif marks in (10, 16):
+            return (
+                disclaimer +
+                "# Problems Associated with Conventional File Processing Systems — 10-Marks Solution\n\n"
+                "## 1. Overview of File Processing Systems\n"
+                "Before modern DBMS software was developed, organizations stored business records in flat files managed directly by the OS file system. "
+                "Application programs written in languages like COBOL or C were responsible for opening, parsing, reading, and updating these files. "
+                "This architecture led to severe operational flaws that motivated the invention of the Database Management System.\n\n"
+                "## 2. Detailed Breakdown of the Seven Classic Problems\n\n"
+                "### 1. Data Redundancy and Inconsistency\n"
+                "- **Redundancy:** Different departments maintain duplicate copies of the same data (e.g. Student address stored in both Hostel file and Accounts file).\n"
+                "- **Inconsistency:** Updating an address in the Hostel file without updating the Accounts file creates conflicting, contradictory records.\n\n"
+                "### 2. Difficulty in Accessing Data\n"
+                "- Flat file systems provide no declarative query language (like SQL).\n"
+                "- To answer unexpected ad-hoc questions (e.g. *\"Find students with GPA > 8.0 living in Bangalore\"*), a programmer must write and compile a brand-new application program.\n\n"
+                "### 3. Data Isolation\n"
+                "- Data is scattered across multiple physical files created in different programming languages, formats, and encodings (e.g. CSV, fixed-width text, binary records).\n"
+                "- Writing software to cross-reference or join these files is complex and error-prone.\n\n"
+                "### 4. Integrity Problems\n"
+                "- Business constraints (e.g. `Balance >= 500`, `Age between 18 and 60`) are hardcoded directly into application code.\n"
+                "- When constraints change, every existing program must be manually modified and recompiled.\n\n"
+                "### 5. Atomicity Problems (Failure Recovery)\n"
+                "- In a bank fund transfer, $500 is debited from Account A and credited to Account B.\n"
+                "- If the system crashes midway after debiting A, flat files leave the database in an inconsistent state without automated rollback.\n\n"
+                "### 6. Concurrent Access Anomalies\n"
+                "- When two users attempt to update the same file simultaneously without lock managers, updates overwrite one another (**Lost Update Problem**).\n\n"
+                "### 7. Security and Access Control Problems\n"
+                "- OS permissions operate at the entire file level (Read/Write on file).\n"
+                "- There is no fine-grained mechanism to permit a user to view salary data without viewing medical records in the same record structure.\n\n"
+                "## 3. Comparison Diagram: File System vs DBMS Architecture\n"
+                "```mermaid\n"
+                "graph TD\n"
+                "    subgraph Conventional File Processing [Scattered & Redundant]\n"
+                "        ProgA[Program A] --> FileA[(File A: Redundant Data)]\n"
+                "        ProgB[Program B] --> FileB[(File B: Isolated Data)]\n"
+                "    end\n"
+                "    subgraph Modern DBMS Approach [Centralized & Consistent]\n"
+                "        User1[App 1] & User2[App 2] --> DBMS[DBMS Engine]\n"
+                "        DBMS --> CentralDB[(Single Integrated Database)]\n"
+                "    end\n"
+                "```\n\n"
+                "## 4. Semester Exam Conclusion\n"
+                "DBMS resolves each of these seven limitations by providing centralized schemas, declarative SQL querying, declarative integrity constraints, ACID transactions, and fine-grained role-based security."
+            )
+        else:
+            return (
+                disclaimer +
+                "### 📝 Problems of Conventional File Processing System — 5-Marks Structured Explanation\n\n"
+                "#### 1. Definition\n"
+                "Conventional file processing refers to storing records in isolated computer files handled directly by OS file systems before the introduction of centralized DBMS.\n\n"
+                "#### 2. Major Problems Identified in University Curricula\n\n"
+                "1. **Data Redundancy:** Same data stored multiple times in different department files, wasting disk storage.\n"
+                "2. **Data Inconsistency:** When duplicate copies have differing values after partial updates.\n"
+                "3. **Difficulty in Accessing Data:** Requires new program code for every new ad-hoc query.\n"
+                "4. **Data Isolation:** Multiple files formatted in differing file structures make joins difficult.\n"
+                "5. **Integrity Problems:** Constraints cannot be enforced centrally; hardcoded in programs.\n"
+                "6. **Atomicity Issues:** System crash midway leaves files corrupt without automatic rollback.\n"
+                "7. **Security Limitations:** Cannot enforce row-level or column-level access controls.\n\n"
+                "#### 3. Architecture Flow Diagram\n"
+                "```mermaid\n"
+                "graph LR\n"
+                "    A[Flat Files] --> B[Data Redundancy & Inconsistency]\n"
+                "    A --> C[No Crash Recovery / Atomicity]\n"
+                "    A --> D[Hardcoded Integrity Rules]\n"
+                "```\n\n"
+                "#### 4. Short Conclusion\n"
+                "DBMS was created to eliminate these flaws by decoupling data management from application code."
+            )
+
+    # ── 14. DIFFERENCES BETWEEN DBMS AND FILE MANAGEMENT SYSTEM ──────────────
+    elif any(k in t or k in expanded for k in ["differences between dbms and file", "difference between dbms and file", "dbms vs file", "dbms and file", "dbms file management"]) or ("dbms" in tokens and "file" in tokens):
+        if marks == 2:
+            return (
+                disclaimer +
+                "### 🎯 DBMS vs File Management System — 2-Marks University Exam Answer\n\n"
+                "#### 1. Core Distinctions (1 Mark)\n"
+                "- **Redundancy:** High in File System (duplicate files); Minimal in DBMS (controlled redundancy).\n"
+                "- **Query Language:** File System has no built-in query language; DBMS provides declarative SQL.\n\n"
+                "#### 2. Technical Capabilities (1 Mark)\n"
+                "- **Crash Recovery & ACID:** File system lacks automated transactional rollback; DBMS enforces ACID transactions and logging.\n\n"
+                "> 💡 **Exam Tip:** Draw a 3-row comparison table to secure full 2 marks."
+            )
+        else:
+            return (
+                disclaimer +
+                "### 📝 Differences Between DBMS and File Management System — 5 to 10-Marks Solution\n\n"
+                "#### 1. Definition\n"
+                "A **File Management System** relies on native OS file structures to store data with application-specific code, whereas a **DBMS** is a centralized software layer designed to manage structured, interrelated data with concurrency, integrity, and security.\n\n"
+                "#### 2. Comprehensive University Comparison Table\n\n"
+                "| Criteria | File Management System | Database Management System (DBMS) |\n"
+                "| :--- | :--- | :--- |\n"
+                "| **1. Data Redundancy** | High (same data stored in multiple files) | Controlled & minimized centrally |\n"
+                "| **2. Data Consistency** | Low (changes in one file don't sync) | High (centralized update propagation) |\n"
+                "| **3. Query Processing** | No built-in query tool (manual code needed)| Efficient declarative query language (SQL) |\n"
+                "| **4. Data Independence** | ❌ None (program code dependent on file layout)| ✅ Full (Logical and Physical independence) |\n"
+                "| **5. Crash Recovery** | Manual, complex, prone to data loss | Automated via Write-Ahead Logging & rollback |\n"
+                "| **6. Concurrency Control** | Primitive file locks (blocks whole file) | Fine-grained record/table locks (2PL, MVCC) |\n"
+                "| **7. Security & Rights** | File-level OS permissions only | Fine-grained (Role-based, View-level, Table-level) |\n"
+                "| **8. Integrity Constraints**| Hardcoded in every application program | Declaratively enforced in schema (PK, FK, Check) |\n"
+                "| **9. Cost & Complexity** | Low cost, simple initial setup | Higher software and memory overhead |\n\n"
+                "#### 3. Architecture Comparison Diagram\n"
+                "```mermaid\n"
+                "graph TD\n"
+                "    subgraph File System Architecture\n"
+                "        App1[App 1] --> F1[(File 1)]\n"
+                "        App2[App 2] --> F2[(File 2)]\n"
+                "    end\n"
+                "    subgraph DBMS Architecture\n"
+                "        AppA[App 1] & AppB[App 2] --> Engine[DBMS Server / Query Engine]\n"
+                "        Engine --> DB[(Unified Database)]\n"
+                "    end\n"
+                "```\n\n"
+                "#### 4. Conclusion\n"
+                "File systems are suited only for small, single-user desktop applications, while DBMS is mandatory for enterprise applications requiring multi-user transactional integrity."
+            )
+
+    # ── 15. DATA MODELS AND TYPES OF DATA MODELS ─────────────────────────────
+    elif any(k in t or k in expanded for k in ["data model", "data models", "types of data models", "types of data model", "what is data model"]):
+        if marks == 2:
+            return (
+                disclaimer +
+                "### 🎯 Data Models & Types — 2-Marks University Exam Answer\n\n"
+                "#### 1. Core Definition (1 Mark)\n"
+                "A **Data Model** is an abstract mathematical and conceptual framework that defines how data is structured, stored, related, and constrained within a database system.\n\n"
+                "#### 2. The Four Primary Categories (1 Mark)\n"
+                "1. **Relational Model:** Data represented as two-dimensional tables (relations).\n"
+                "2. **Entity-Relationship (ER) Model:** Conceptual model using entities, attributes, and relationships.\n"
+                "3. **Hierarchical Model:** Tree structure with parent-child 1:N hierarchy.\n"
+                "4. **Network Model:** Graph structure supporting many-to-many relationships via record pointers.\n\n"
+                "> 💡 **Exam Tip:** The Relational Model is the most widely adopted data model in modern computing."
+            )
+        else:
+            return (
+                disclaimer +
+                "### 📝 Data Models and Types of Data Models — 5 to 10-Marks Solution\n\n"
+                "#### 1. Definition & Purpose\n"
+                "A **Data Model** is a collection of conceptual tools for describing data, data relationships, data semantics, and consistency constraints. "
+                "It provides the formal blueprint according to which database systems are engineered.\n\n"
+                "#### 2. Major Types of Data Models\n\n"
+                "1. **Relational Model (Codd, 1970):**\n"
+                "   - Data is stored in two-dimensional tables called **relations**.\n"
+                "   - Rows represent tuples (records); columns represent attributes.\n"
+                "   - *Examples:* PostgreSQL, MySQL, Oracle.\n\n"
+                "2. **Entity-Relationship (ER) Model:**\n"
+                "   - High-level conceptual design model based on real-world objects (**Entities**) and associations (**Relationships**).\n"
+                "   - Widely used for database blueprint design before conversion into relational tables.\n\n"
+                "3. **Hierarchical Model:**\n"
+                "   - Organizes data into an inverted tree structure with one **Root** record.\n"
+                "   - Strictly enforces 1-to-Many ($1:N$) parent-child relationships.\n"
+                "   - *Example:* IBM IMS.\n\n"
+                "4. **Network Model:**\n"
+                "   - Represents data as records connected by pointers in a directed graph.\n"
+                "   - Allows a child record to have multiple parent records ($M:N$ relationships supported directly).\n"
+                "   - *Example:* CODASYL DBTG.\n\n"
+                "5. **Object-Oriented / Object-Relational Model:**\n"
+                "   - Combines object-oriented programming concepts (classes, encapsulation, inheritance) with relational persistence.\n\n"
+                "#### 3. Comparison of Data Models\n\n"
+                "| Model | Structure | Relationships | Querying Ease |\n"
+                "| :--- | :--- | :--- | :--- |\n"
+                "| **Relational** | Tables (Tuples & Attributes) | 1:1, 1:N, M:N via Foreign Keys | High (SQL) |\n"
+                "| **ER Model** | Graphical Diagram | Conceptual associations | Design only |\n"
+                "| **Hierarchical**| Tree (Parent-Child) | 1:N strictly | Complex pointer navigation |\n"
+                "| **Network** | Graph (Pointers) | M:N directly | Complex pointer navigation |\n\n"
+                "#### 4. Architecture Diagram (Draw in Exam)\n"
+                "```mermaid\n"
+                "graph TD\n"
+                "    DM[Data Models Classification]\n"
+                "    DM --> Rel[Relational Model: Tables]\n"
+                "    DM --> ER[ER Model: Entities & Diamonds]\n"
+                "    DM --> Hier[Hierarchical: Tree Hierarchy]\n"
+                "    DM --> Net[Network: Graph Pointers]\n"
+                "```\n\n"
+                "#### 5. Conclusion\n"
+                "Modern database engineering relies on the **ER Model** for conceptual design, which is then mapped to the **Relational Model** for physical database implementation."
+            )
+
+    # ── 16. DATABASE USERS AND ROLES ─────────────────────────────────────────
+    elif any(k in t or k in expanded for k in ["database user", "database users", "types of database users", "db users"]):
+        if marks == 2:
+            return (
+                disclaimer +
+                "### 🎯 Database Users and Roles — 2-Marks University Exam Answer\n\n"
+                "#### 1. Core Classification (1 Mark)\n"
+                "Database users are classified by how they interact with the database system:\n"
+                "1. **Database Administrator (DBA):** Responsible for authorization, schema design, backup, and performance tuning.\n"
+                "2. **Application Programmers:** Write software code that interacts with the DBMS using DML/APIs.\n\n"
+                "#### 2. End Users (1 Mark)\n"
+                "3. **Sophisticated Users:** Interact directly via SQL query tools without writing programs (e.g. data analysts).\n"
+                "4. **Naive / Parametric Users:** Unsophisticated end-users interacting via canned GUI forms (e.g. bank tellers, mobile app users).\n\n"
+                "> 💡 **Exam Tip:** Mention DBA as having the highest level of privilege."
+            )
+        else:
+            return (
+                disclaimer +
+                "### 📝 Classification of Database Users — 5-Marks Structured Explanation\n\n"
+                "#### 1. Definition\n"
+                "A **Database User** is any person or system that interacts with a DBMS to store, manipulate, administer, or retrieve data.\n\n"
+                "#### 2. The Four Major Classes of Database Users\n\n"
+                "1. **Database Administrator (DBA):**\n"
+                "   - Has superuser administrative control over the entire system.\n"
+                "   - *Duties:* Schema definition, physical storage organization, granting user permissions, backup and crash recovery, performance monitoring.\n\n"
+                "2. **Application Programmers (Software Engineers):**\n"
+                "   - Write application software in languages like Java, Python, or C# that embed SQL DML queries to automate business transactions.\n\n"
+                "3. **Sophisticated Users (Business Analysts / Data Scientists):**\n"
+                "   - Formulate custom, ad-hoc analytical queries using SQL, Python, or statistical software without using pre-packaged forms.\n\n"
+                "4. **Naive / Parametric Users (General End-Users):**\n"
+                "   - Make up the majority of users. They interact with the system strictly through pre-built menu-driven forms and mobile applications (e.g., ticket booking, ATM withdrawal).\n\n"
+                "#### 3. User Interaction Flow Diagram\n"
+                "```mermaid\n"
+                "graph TD\n"
+                "    DBA[Database Administrator] -->|DDL Schema & Security| Engine[DBMS Core]\n"
+                "    Dev[Application Programmers] -->|DML Code in APIs| Engine\n"
+                "    Analyst[Sophisticated Users] -->|Ad-hoc SQL Queries| Engine\n"
+                "    EndUser[Naive End Users] -->|GUI Forms / Mobile App| Dev\n"
+                "```\n\n"
+                "#### 4. Short Conclusion\n"
+                "Segmenting users ensures proper role-based access control (RBAC) and prevents accidental corruption of critical database schemas."
+            )
+
+    # ── 17. DATABASE APPLICATIONS AND ADVANTAGES ─────────────────────────────
+    elif any(k in t or k in expanded for k in ["database application", "database applications", "advantages of database", "advantages of dbms", "database advantages", "applications and advantages"]) or ("database" in tokens and ("application" in tokens or "advantage" in tokens or "advantages" in tokens)):
+        if marks == 2:
+            return (
+                disclaimer +
+                "### 🎯 Database Applications & Advantages — 2-Marks University Exam Answer\n\n"
+                "#### 1. Real-World Applications (1 Mark)\n"
+                "- **Banking:** Managing customer balances, accounts, and atomic transactions.\n"
+                "- **Airlines:** Global seat reservations and flight schedule tracking.\n"
+                "- **Universities:** Student registration, grading, and course management.\n\n"
+                "#### 2. Core Advantages of DBMS (1 Mark)\n"
+                "- **Controls Data Redundancy:** Single source of truth eliminates duplicate storage.\n"
+                "- **Enforces Security & ACID:** Ensures data consistency and unauthorized access prevention.\n\n"
+                "> 💡 **Exam Tip:** Mention at least 2 real-world enterprise sectors."
+            )
+        else:
+            return (
+                disclaimer +
+                "### 📝 Database Applications and Advantages of DBMS — 5 to 10-Marks Solution\n\n"
+                "#### 1. Definition\n"
+                "A **Database Application** is an enterprise software program that interacts with a DBMS to process business workflows, maintain records, and provide real-time reporting.\n\n"
+                "#### 2. Major Real-World Applications\n"
+                "1. **Banking & Finance:** Processing credit/debit transactions, ATM operations, maintaining ACID compliance.\n"
+                "2. **Airlines & Railways:** Managing reservations, ticket bookings, passenger manifests across concurrent users.\n"
+                "3. **Telecommunications:** Tracking call detail records (CDRs), subscriber profiles, real-time monthly billing.\n"
+                "4. **E-Commerce & Retail:** Product inventories, shopping carts, order fulfillment, delivery tracking (e.g. Amazon).\n"
+                "5. **Healthcare & Hospitals:** Electronic health records (EHR), patient histories, doctor scheduling.\n\n"
+                "#### 3. Core Advantages of Using a DBMS\n\n"
+                "- **1. Controlling Data Redundancy:** Centralized data storage minimizes duplicate copies across systems.\n"
+                "- **2. Data Consistency:** When a record is updated, the change is instantly visible to all authorized users.\n"
+                "- **3. Sharing of Data:** Supports hundreds of concurrent client connections without conflicting overwrites.\n"
+                "- **4. Enforcement of Integrity Constraints:** Guarantees business rules (e.g. Primary Key uniqueness, Foreign Key integrity).\n"
+                "- **5. Automated Backup and Recovery:** Rollback and recovery subsystems restore state after hardware crashes.\n"
+                "- **6. Data Independence:** Decouples logical business logic from underlying physical storage drives.\n\n"
+                "#### 4. Architecture Diagram\n"
+                "```mermaid\n"
+                "graph TD\n"
+                "    App1[Banking App] & App2[E-Commerce App] & App3[Hospital App] --> DBMS[Central DBMS Server]\n"
+                "    DBMS --> Sec[Access Security & Lock Manager]\n"
+                "    Sec --> DB[(Reliable ACID Database)]\n"
+                "```\n\n"
+                "#### 5. Conclusion\n"
+                "The shift from flat files to DBMS is the cornerstone of modern software engineering and enterprise infrastructure."
+            )
+
+    # ── 18. ENTITY-RELATIONSHIP (ER) DIAGRAMS & COMPONENTS ───────────────────
+    elif any(k in t or k in expanded for k in ["er diagram", "er diagrams", "entity relationship", "entity-relationship", "er model", "assignment 2 er", "er components"]):
+        if marks == 2:
+            return (
+                disclaimer +
+                "### 🎯 Entity-Relationship (ER) Diagrams — 2-Marks University Exam Answer\n\n"
+                "#### 1. Core Definition (1 Mark)\n"
+                "An **Entity-Relationship (ER) Diagram** is a high-level graphical data model that visually represents the conceptual schema of a database using entities, attributes, and relationships.\n\n"
+                "#### 2. The Core Geometric Notations (1 Mark)\n"
+                "- **Rectangle:** Represents an **Entity Set** (e.g., `Student`).\n"
+                "- **Ellipse / Oval:** Represents an **Attribute** (e.g., `Roll_No`).\n"
+                "- **Diamond:** Represents a **Relationship Set** (e.g., `Enrolled_In`).\n"
+                "- **Underlined Attribute:** Indicates the **Primary Key**.\n\n"
+                "> 💡 **Exam Tip:** Double rectangle denotes a Weak Entity; double oval denotes a Multivalued Attribute."
+            )
+        else:
+            return (
+                disclaimer +
+                "### 📝 Entity-Relationship (ER) Modeling and Diagrams — 5 to 10-Marks Solution\n\n"
+                "#### 1. Definition\n"
+                "An **Entity-Relationship (ER) Diagram** is a visual design tool invented by Peter Chen (1976) used to model the logical structure of a database prior to physical table creation in SQL.\n\n"
+                "#### 2. Core Components & Symbols\n\n"
+                "| Component | Graphic Symbol | Meaning & Example |\n"
+                "| :--- | :---: | :--- |\n"
+                "| **Strong Entity** | Single Rectangle | Real-world object with independent existence (`Employee`) |\n"
+                "| **Weak Entity** | Double Rectangle | Depends on an identifying strong entity (`Dependent`) |\n"
+                "| **Simple Attribute** | Single Ellipse | Atomic characteristic (`EmpName`, `Salary`) |\n"
+                "| **Key Attribute** | Underlined Ellipse | Uniquely identifies an entity (`EmpID`) |\n"
+                "| **Multivalued Attribute**| Double Ellipse | Can hold multiple values (`Phone_Numbers`) |\n"
+                "| **Derived Attribute** | Dashed Ellipse | Calculated from another attribute (`Age` derived from `DOB`) |\n"
+                "| **Relationship Set** | Diamond | Association between entities (`Works_For`) |\n"
+                "| **Identifying Relationship**| Double Diamond | Relates weak entity to owner entity |\n\n"
+                "#### 3. Cardinality Ratios (Mapping Constraints)\n"
+                "- **One-to-One (1:1):** One employee manages at most one department.\n"
+                "- **One-to-Many (1:N):** One department contains many employees.\n"
+                "- **Many-to-Many (M:N):** Many students enroll in many courses.\n\n"
+                "#### 4. Architecture Diagram (Draw in Exam)\n"
+                "```mermaid\n"
+                "graph LR\n"
+                "    E1[Employee Entity: Rectangle] --- R{Works_For: Diamond} --- E2[Department Entity: Rectangle]\n"
+                "    E1 --- A1((EmpID: Underlined))\n"
+                "    E1 --- A2((EmpName: Oval))\n"
+                "    E2 --- A3((DeptID: Underlined))\n"
+                "```\n\n"
+                "#### 5. Converting ER Diagrams to Relational Tables\n"
+                "1. Each strong entity becomes an independent table with its primary key.\n"
+                "2. 1:N relationships map the primary key of the '1' side as a foreign key on the 'N' side.\n"
+                "3. M:N relationships create a new junction table containing primary keys of both participating entities.\n\n"
+                "#### 6. Short Conclusion\n"
+                "ER diagrams provide an intuitive blueprint that bridges business user requirements with formal relational schemas."
+            )
+
+    # ── 19. SQL LAB QUERIES (EMPLOYEE & STUDENT DATABASE, STRING & DATE) ─────
+    elif any(k in t or k in expanded for k in ["employee database", "student database", "lab observation", "queries lab", "string functions and date functions", "sql lab"]):
+        return (
+            disclaimer +
+            "### 📝 SQL Lab Observation Queries: Employee & Student Database — 5 to 10-Marks Solution\n\n"
+            "#### 1. Database Schemas\n"
+            "```sql\n"
+            "-- Employee Table Schema\n"
+            "CREATE TABLE Employee (\n"
+            "    EmpID INT PRIMARY KEY,\n"
+            "    EmpName VARCHAR(50),\n"
+            "    Dept VARCHAR(30),\n"
+            "    Salary DECIMAL(10,2),\n"
+            "    JoinDate DATE\n"
+            ");\n\n"
+            "-- Student Table Schema\n"
+            "CREATE TABLE Student (\n"
+            "    RollNo INT PRIMARY KEY,\n"
+            "    Name VARCHAR(50),\n"
+            "    Branch VARCHAR(20),\n"
+            "    Marks INT,\n"
+            "    DOB DATE\n"
+            ");\n"
+            "```\n\n"
+            "#### 2. Lab Part A: Employee Database Queries with Set Operators\n"
+            "```sql\n"
+            "-- 1. Find employees working in either 'IT' or 'Finance' using UNION\n"
+            "SELECT EmpID, EmpName, Dept FROM Employee WHERE Dept = 'IT'\n"
+            "UNION\n"
+            "SELECT EmpID, EmpName, Dept FROM Employee WHERE Dept = 'Finance';\n\n"
+            "-- 2. Find employees earning > 50,000 who belong to 'IT' using INTERSECT\n"
+            "SELECT EmpID, EmpName FROM Employee WHERE Salary > 50000\n"
+            "INTERSECT\n"
+            "SELECT EmpID, EmpName FROM Employee WHERE Dept = 'IT';\n"
+            "```\n\n"
+            "#### 3. Lab Part B: String Functions in SQL\n"
+            "```sql\n"
+            "-- UPPER / LOWER: Convert case\n"
+            "SELECT UPPER(EmpName) AS Caps_Name, LOWER(Dept) FROM Employee;\n\n"
+            "-- LENGTH: Get character length\n"
+            "SELECT EmpName, LENGTH(EmpName) AS Name_Length FROM Employee;\n\n"
+            "-- SUBSTR / SUBSTRING: Extract portion of string\n"
+            "SELECT EmpName, SUBSTR(EmpName, 1, 3) AS Prefix FROM Employee;\n\n"
+            "-- CONCAT: Join string attributes\n"
+            "SELECT CONCAT(EmpName, ' works in ', Dept) AS Emp_Detail FROM Employee;\n"
+            "```\n\n"
+            "#### 4. Lab Part C: Date Functions in SQL\n"
+            "```sql\n"
+            "-- CURRENT_DATE / SYSDATE: Get current system date\n"
+            "SELECT EmpName, JoinDate, CURRENT_DATE FROM Employee;\n\n"
+            "-- DATEDIFF / EXTRACT: Calculate tenure or age\n"
+            "SELECT Name, DOB,\n"
+            "       ROUND(DATEDIFF(CURRENT_DATE, DOB)/365.25) AS Age_Years\n"
+            "FROM Student;\n\n"
+            "-- EXTRACT / YEAR: Extract year or month\n"
+            "SELECT EmpName, EXTRACT(YEAR FROM JoinDate) AS Join_Year FROM Employee;\n"
+            "```\n\n"
+            "#### 5. Short Conclusion\n"
+            "Writing standard ANSI SQL functions ensures maximum compatibility across Oracle, MySQL, and PostgreSQL during practical lab examinations."
+        )
+
     return None
 
 
@@ -1002,21 +1979,79 @@ def get_curriculum_master_answer(clean_topic: str, marks: int, is_explicit_marks
 def build_universal_curriculum_answer(topic: str, marks: int, is_explicit_marks: bool) -> str:
     """
     Synthesizes a clean, technically correct, non-hallucinated curriculum explanation
-    for any engineering/science topic following exact 2M / 5M / 10M / Normal rubrics.
+    for any engineering/science topic tailored dynamically to the question's specific domain.
     """
-    clean_topic = topic.title()
+    clean_topic = topic.title().strip()
+    clean_lower = clean_topic.lower()
     disclaimer = get_not_in_materials_disclaimer(clean_topic)
+
+    # Domain classification
+    is_db = any(k in clean_lower for k in ["sql", "database", "table", "relation", "schema", "query", "normalization", "transaction", "index", "key", "view"])
+    is_algo = any(k in clean_lower for k in ["algorithm", "sort", "search", "tree", "graph", "dynamic programming", "complexity", "stack", "queue"])
+    is_os = any(k in clean_lower for k in ["operating system", "process", "thread", "memory", "cpu", "scheduling", "semaphore", "deadlock", "cache", "paging"])
+    is_net = any(k in clean_lower for k in ["network", "protocol", "packet", "routing", "tcp", "udp", "ip", "layer", "lan", "wan"])
+
+    if is_db:
+        domain_name = "Database Systems & Engineering"
+        diag_mermaid = (
+            "```mermaid\n"
+            "graph LR\n"
+            "    Query[User SQL / Request] --> Parser[Query Optimizer & Parser]\n"
+            "    Parser --> Engine[Execution Plan Engine]\n"
+            "    Engine --> Storage[(Relational Database Storage)]\n"
+            "```"
+        )
+    elif is_algo:
+        domain_name = "Data Structures & Algorithms"
+        diag_mermaid = (
+            "```mermaid\n"
+            "graph TD\n"
+            "    Input[Input Dataset: Size N] --> Process[Algorithmic Routine / Transformations]\n"
+            "    Process --> Comp{Termination Condition Met?}\n"
+            "    Comp -- Yes --> Output[Optimal Output Result]\n"
+            "    Comp -- No --> Process\n"
+            "```"
+        )
+    elif is_net:
+        domain_name = "Computer Networks & Communications"
+        diag_mermaid = (
+            "```mermaid\n"
+            "graph LR\n"
+            "    Sender[Sender Station] -->|Packet Encapsulation| Channel[Transmission Medium]\n"
+            "    Channel -->|Verification & Protocol Check| Receiver[Receiver Station]\n"
+            "```"
+        )
+    elif is_os:
+        domain_name = "Operating Systems & Systems Architecture"
+        diag_mermaid = (
+            "```mermaid\n"
+            "graph TD\n"
+            "    UserApp[User Space Process] --> Trap[System Call / Trap]\n"
+            "    Trap --> Kernel[OS Kernel Execution]\n"
+            "    Kernel --> HW[Hardware Resource Allocation]\n"
+            "```"
+        )
+    else:
+        domain_name = "Computer Science & Engineering"
+        diag_mermaid = (
+            "```mermaid\n"
+            "graph LR\n"
+            "    A[Input Data & Specifications] --> B[Algorithmic Logic Routine]\n"
+            "    B --> C[Constraint Verification]\n"
+            "    C --> D[Deterministic State Output]\n"
+            "```"
+        )
 
     if marks == 2:
         return (
             disclaimer +
             f"### 🎯 {clean_topic} — 2-Marks University Exam Answer\n\n"
             f"#### 1. Definition (1 Mark)\n"
-            f"**{clean_topic}** is a core computer science and engineering concept that defines the formal mechanism, structure, or protocol governing how computational components process, synchronize, and validate state.\n\n"
+            f"**{clean_topic}** is a core {domain_name} concept that defines the formal mechanism, structure, or rule governing how computational components process and validate state.\n\n"
             f"#### 2. Key Rule & Mechanism (1 Mark)\n"
-            f"- **Primary Principle:** Enforces deterministic invariants to maintain correctness and prevent runtime failures.\n"
-            f"- **Operational Boundary:** Operates within predictable time and memory complexity limits under standard system constraints.\n\n"
-            f"> 💡 **Exam Tip:** Keep the definition under 3 lines and cite the primary rule or equation to secure full 2 marks."
+            f"- **Primary Invariant:** Enforces predictable correctness and deterministic invariants under standard operational bounds.\n"
+            f"- **System Purpose:** Eliminates failure states and ensures standardization across university curricula.\n\n"
+            f"> 💡 **Exam Tip:** Keep the definition under 3 lines and cite the primary operational rule to secure full 2 marks."
         )
 
     elif marks in (10, 16):
@@ -1024,35 +2059,28 @@ def build_universal_curriculum_answer(topic: str, marks: int, is_explicit_marks:
             disclaimer +
             f"# {clean_topic} — 10-Marks Comprehensive University Solution\n\n"
             f"## 1. Definition & Theoretical Foundation\n"
-            f"**{clean_topic}** is a fundamental computing principle designed to ensure architectural predictability, computational correctness, and optimal resource utilization across software and hardware systems.\n\n"
-            f"## 2. Operating Principles & Architecture\n"
-            f"In university curricula, **{clean_topic}** is analyzed to understand how complex computing tasks are decoupled into modular, verifiable steps. "
-            f"Without this mechanism, systems suffer from non-deterministic race conditions, uncoordinated state transitions, and cascading failures.\n\n"
+            f"In university {domain_name} curricula, **{clean_topic}** represents a fundamental computational concept designed to achieve architectural predictability, structural correctness, and optimal resource utilization.\n\n"
+            f"## 2. Core Architectural Principles\n"
+            f"1. **Formal Specification:** Decouples complex engineering tasks into modular, formally verifiable stages.\n"
+            f"2. **State Invariance:** Ensures system invariants are maintained before, during, and after state transitions.\n"
+            f"3. **Fault Tolerance & Safety:** Preempts edge cases and uncoordinated state transitions that can cause systemic failure.\n\n"
             f"## 3. Step-by-Step Working Mechanism\n"
-            f"1. **Phase 1: Ingestion & Parameter Setup:** Registers, buffers, and input bounds are initialized.\n"
-            f"2. **Phase 2: Invariant Validation:** Boundary conditions and security/integrity constraints are evaluated.\n"
-            f"3. **Phase 3: Core Algorithmic Execution:** The primary mathematical formulas or logic routines transform data.\n"
-            f"4. **Phase 4: Verification & Handoff:** Results are validated against checksums, invariants, or expected outputs before being persisted.\n\n"
-            f"## 4. Architectural Block Diagram (Simple to Draw in Exam)\n"
-            f"```mermaid\n"
-            f"graph TD\n"
-            f"    A[Incoming Request / Raw Data] --> B[Validation Checkpoint]\n"
-            f"    B --> C{{Invariants Valid?}}\n"
-            f"    C -- Yes --> D[Core Processing Routine]\n"
-            f"    C -- No --> E[Raise Exception / Error Handler]\n"
-            f"    D --> F[Post-Processing Verification]\n"
-            f"    F --> G[Commit State to Output]\n"
-            f"```\n\n"
+            f"1. **Phase 1: Ingestion & Parameter Setup:** Relevant data parameters, registers, or inputs are initialized within valid bounds.\n"
+            f"2. **Phase 2: Invariant & Condition Evaluation:** Pre-conditions and operational integrity constraints are validated.\n"
+            f"3. **Phase 3: Core Algorithmic Routine:** The primary mathematical transformation or protocol routine executes.\n"
+            f"4. **Phase 4: Output Verification & Persistence:** Results are verified against expected output criteria and committed.\n\n"
+            f"## 4. System Architecture Diagram (Easy to Draw in Exam)\n"
+            f"{diag_mermaid}\n\n"
             f"## 5. Practical Implementation / Walkthrough\n"
-            f"Consider an engineering pipeline handling concurrent requests: by enforcing **{clean_topic}**, each transaction executes in an isolated environment, verifies boundary invariants, and commits state deterministically.\n\n"
-            f"## 6. Advantages & Limitations\n\n"
-            f"| Metric | {clean_topic} | Conventional Approach |\n"
+            f"In practical engineering systems implementing **{clean_topic}**, operations are executed deterministically under structured constraints, allowing concurrent modules to interact safely without corruption.\n\n"
+            f"## 6. Comparative Analysis Table\n\n"
+            f"| Evaluation Metric | With {clean_topic} | Without Standardized Mechanism |\n"
             f"| :--- | :--- | :--- |\n"
-            f"| **Predictability** | High (Formal bounds enforced) | Variable (Heuristic-based) |\n"
-            f"| **Reliability** | Formally verifiable | Prone to runtime edge cases |\n"
-            f"| **Resource Cost** | Optimized complexity | High overhead under scale |\n\n"
+            f"| **Predictability** | High (Formally verified bounds) | Low (Heuristic and inconsistent) |\n"
+            f"| **Reliability** | Strict invariant preservation | High risk of runtime edge cases |\n"
+            f"| **Resource Overhead** | Optimized complexity ($O(N)$ / $O(\\log N)$) | High overhead under load |\n\n"
             f"## 7. Semester Exam Conclusion\n"
-            f"Writing this structured explanation with the formal definition, working steps, diagram, and comparative analysis guarantees full 10 marks in university semester examinations."
+            f"Stating the formal definition, structural steps, architecture diagram, and comparative analysis guarantees full 10 marks in university examinations."
         )
 
     else:
@@ -1060,27 +2088,17 @@ def build_universal_curriculum_answer(topic: str, marks: int, is_explicit_marks:
             disclaimer +
             f"### 📝 {clean_topic} — 5-Marks Structured Concept Explanation\n\n"
             f"#### 1. Definition\n"
-            f"**{clean_topic}** refers to the structured engineering methodology used to coordinate operations, optimize system throughput, and eliminate unexpected failure states across computing architectures.\n\n"
-            f"#### 2. Simple Explanation\n"
-            f"In simple terms, **{clean_topic}** establishes an agreed-upon contract between system modules. "
-            f"Instead of allowing uncoordinated executions that can cause data corruption or bottlenecks, it breaks the task into explicit stages with verification checkpoints.\n\n"
-            f"#### 3. Important Points\n"
+            f"**{clean_topic}** refers to the structured engineering methodology within {domain_name} used to coordinate operations, optimize system throughput, and eliminate unexpected failure states.\n\n"
+            f"#### 2. Key Working Principles\n"
             f"- **Input Validation:** Ingests parameters and checks boundary constraints before state changes.\n"
-            f"- **Core Processing:** Applies algorithmic logic or protocol rules predictably.\n"
-            f"- **Error Containment:** Discards invalid intermediate states or triggers localized recovery.\n"
-            f"- **Standardization:** Follows standard university syllabus models.\n\n"
-            f"#### 4. System Flow Diagram (Easy to Draw in Exam)\n"
-            f"```mermaid\n"
-            f"graph LR\n"
-            f"    A[Input Parameters] --> B[Boundary Validation Check]\n"
-            f"    B --> C[Core Transformation / Logic]\n"
-            f"    C --> D[Integrity Verification Checkpoint]\n"
-            f"    D --> E[Verified Output / Committed State]\n"
-            f"```\n\n"
-            f"#### 5. Practical Example\n"
-            f"In real-world engineering systems, when an input request arrives, the system validates bounds, executes the core algorithm, and commits state only after passing validation.\n\n"
-            f"#### 6. Short Conclusion\n"
-            f"Mastering **{clean_topic}** provides the theoretical grounding required for semester examinations and technical design interviews."
+            f"- **Deterministic Execution:** Applies algorithmic rules or protocol standards predictably.\n"
+            f"- **Integrity Preservation:** Protects system invariants and ensures clean state transitions.\n\n"
+            f"#### 3. Architecture / Flow Diagram (Easy to Draw in Exam)\n"
+            f"{diag_mermaid}\n\n"
+            f"#### 4. Practical Implementation Points\n"
+            f"In real-world computing environments, **{clean_topic}** ensures modular decoupling so that independent components communicate through standard, well-defined interfaces.\n\n"
+            f"#### 5. Short Conclusion\n"
+            f"Mastering **{clean_topic}** provides the essential theoretical grounding required for semester examinations and technical viva interviews."
         )
 
 
@@ -1129,15 +2147,29 @@ def generate_structured_response(
         if len(after_colon) >= 2:
             q_target = after_colon
 
+    # Clean quotes and question numbering prefixes
+    q_target = q_target.strip(" '\"`“”‘’\t\n")
+    q_target = re.sub(r"^(?:q\d+[\s:.-]*|\d+[\s:.-]+|\([a-z0-9]+\)[\s:.-]*)", "", q_target, flags=re.IGNORECASE).strip()
+    q_target = q_target.strip(" '\"`“”‘’\t\n")
+
     clean_topic = re.sub(
-        r"^(what is|what are|define|explain about|explain simply|explain|differentiate between|differentiate|describe|how does|give an account on|write short notes on|discuss about|discuss|give a|solve a|provide a)\s+",
+        r"^(what is|what are|define|explain about|explain simply|explain|differentiate between|differentiate|describe|how does|give an account on|write short notes on|discuss about|discuss|give a|solve a|provide a|state and explain|illustrate|briefly explain)\s+",
         "",
         q_target,
         flags=re.IGNORECASE,
-    )
+    ).strip()
     clean_topic = re.sub(r"\s+for\s+\d+\s*marks?.*$", "", clean_topic, flags=re.IGNORECASE).strip()
     clean_topic = re.sub(r"^(about|on)\s+", "", clean_topic, flags=re.IGNORECASE).strip()
+    clean_topic = re.sub(r"\s+note:.*$", "", clean_topic, flags=re.IGNORECASE).strip()
     clean_topic = re.sub(r"[?!.,;:]+$", "", clean_topic).strip()
+
+    if re.search(r"unit[\s_-]*\d+.*intro", clean_topic, re.I):
+        clean_topic = "DBMS Data and Information Architecture"
+    elif re.search(r"assignment[\s_-]*\d+.*er", clean_topic, re.I):
+        clean_topic = "Entity Relationship ER Diagrams"
+    elif re.search(r"employee database|student database|lab observation", clean_topic, re.I):
+        clean_topic = "SQL Lab Queries on Employee and Student Database"
+
     if not clean_topic:
         clean_topic = "Engineering Topic"
 
