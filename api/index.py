@@ -1,5 +1,5 @@
 """
-StudyOS AI — FastAPI Application Entry Point (api/index.py) for Vercel
+StudyOS AI — FastAPI API Entry Point (api/index.py)
 """
 import sys
 from pathlib import Path
@@ -9,10 +9,20 @@ backend_dir = Path(__file__).resolve().parent.parent / "backend"
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
-from app.main import app, handler
+import app.main as _backend
 
-# Static AST match for Vercel framework scanner
-if False:
-    app = FastAPI()
+app = FastAPI(
+    title="StudyOS AI API",
+    version="1.0.0",
+    lifespan=_backend.lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
+
+app.include_router(_backend.app.router)
+app.middleware_stack = _backend.app.middleware_stack
+app.exception_handlers = _backend.app.exception_handlers
+
+handler = app
 
 __all__ = ["app", "handler"]
