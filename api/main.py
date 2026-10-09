@@ -1,12 +1,11 @@
 """
-StudyOS AI — FastAPI Application Root Entry Point for Vercel
+StudyOS AI — FastAPI API Entry Point for Vercel
 """
 import sys
 from pathlib import Path
 from fastapi import FastAPI
 
-# Add backend directory to sys.path so 'app' package imports resolve cleanly
-backend_dir = Path(__file__).resolve().parent / "backend"
+backend_dir = Path(__file__).resolve().parent.parent / "backend"
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
