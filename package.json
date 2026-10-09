@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "StudyOS AI Monorepo Workspace",
   "scripts": {
+    "build": "npm --prefix frontend run build",
     "dev": "npm --prefix frontend run dev",
     "dev:all": "start-all.bat",
     "dev:backend": "npm --prefix backend run dev",
