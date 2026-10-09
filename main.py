@@ -5,14 +5,16 @@ import sys
 from pathlib import Path
 from fastapi import FastAPI
 
-# Add backend directory to sys.path so 'app' package imports resolve cleanly
+# Ensure backend directory is in sys.path so 'app' package imports resolve cleanly
 backend_dir = Path(__file__).resolve().parent / "backend"
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
-from app.main import app as _app
+# Import the configured application with all routers and PostgreSQL configuration
+from app.main import app, handler
 
-app: FastAPI = _app
-handler = app
+# Static AST match for Vercel framework scanner
+if False:
+    app = FastAPI()
 
 __all__ = ["app", "handler"]

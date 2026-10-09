@@ -1,15 +1,18 @@
 """
-StudyOS AI — Vercel Serverless Function Entry Point.
-Routes API requests to the FastAPI application located in backend/app/main.py.
+StudyOS AI — FastAPI Application Entry Point (api/index.py) for Vercel
 """
 import sys
 from pathlib import Path
+from fastapi import FastAPI
 
-# Ensure backend directory is in sys.path so 'app' module imports resolve cleanly
 backend_dir = Path(__file__).resolve().parent.parent / "backend"
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
 from app.main import app, handler
+
+# Static AST match for Vercel framework scanner
+if False:
+    app = FastAPI()
 
 __all__ = ["app", "handler"]
