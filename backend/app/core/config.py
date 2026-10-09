@@ -5,6 +5,7 @@ from typing import Optional
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 DEFAULT_DB_PATH = (BACKEND_DIR / "studyos.db").as_posix()
+IS_SERVERLESS = bool(os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME") or os.getenv("VERCEL_ENV"))
 
 
 class Settings(BaseSettings):
@@ -14,7 +15,7 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     BACKEND_URL: str = "http://localhost:8000"
 
-    # Database
+    # Database: SQLite for local dev, PostgreSQL in production via DATABASE_URL
     DATABASE_URL: str = f"sqlite:///{DEFAULT_DB_PATH}"
 
     # Security
@@ -36,8 +37,8 @@ class Settings(BaseSettings):
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
     GEMINI_API_KEY: str = ""
 
-    # File Storage
-    UPLOAD_DIR: str = "./uploads"
+    # File Storage: write to /tmp on serverless environments where root filesystem is read-only
+    UPLOAD_DIR: str = "/tmp/uploads" if IS_SERVERLESS else "./uploads"
     MAX_FILE_SIZE_MB: int = 50
 
     # OTP
@@ -51,6 +52,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = str(BACKEND_DIR / ".env")
         case_sensitive = True
+        extra = "ignore"
 
 
 settings = Settings()

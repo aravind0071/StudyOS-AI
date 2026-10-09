@@ -1,16 +1,26 @@
 """
-StudyOS AI — FastAPI Main Application (SMTP Email Enabled)
+StudyOS AI — FastAPI Main Application (Production & Serverless Ready)
 """
 
+import os
+import sys
 import logging
+from pathlib import Path
 from contextlib import asynccontextmanager
+
+# Ensure backend root directory is always on sys.path regardless of execution entry point
+_backend_dir = Path(__file__).resolve().parent.parent
+if str(_backend_dir) not in sys.path:
+    sys.path.insert(0, str(_backend_dir))
+
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from sqlalchemy import text
 
 from app.core.config import settings
-from app.core.database import engine, Base
+from app.core.database import engine, Base, init_database_tables
 from app.routers import (
     auth, materials, chat, quiz, study_plan,
     interview, analytics, search, profile,
@@ -28,31 +38,14 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Create all database tables on startup and apply lightweight migrations."""
+    """Safely initialize database tables on startup and apply lightweight migrations."""
     logger.info("StudyOS AI starting up...")
-    Base.metadata.create_all(bind=engine)
-
-    # Safe migration for interview_questions scoring and skip columns
-    try:
-        from sqlalchemy import text
-        with engine.connect() as conn:
-            result = conn.execute(text("PRAGMA table_info(interview_questions)"))
-            cols = [row[1] for row in result.fetchall()]
-            for col_name, col_type in [
-                ("relevance_score", "FLOAT"),
-                ("completeness_score", "FLOAT"),
-                ("communication_score", "FLOAT"),
-                ("overall_score", "FLOAT"),
-                ("is_skipped", "BOOLEAN DEFAULT 0"),
-            ]:
-                if col_name not in cols:
-                    conn.execute(text(f"ALTER TABLE interview_questions ADD COLUMN {col_name} {col_type}"))
-                    conn.commit()
-                    logger.info(f"Added column {col_name} to interview_questions table.")
-    except Exception as e:
-        logger.warning(f"Database column migration note: {e}")
-
-    logger.info("Database tables initialized.")
+    db_ok = init_database_tables()
+    if not db_ok:
+        logger.warning(
+            "StudyOS AI started with database warnings. "
+            "Inspect DATABASE_URL or database logs if queries fail."
+        )
     yield
     logger.info("StudyOS AI shutting down.")
 
@@ -70,11 +63,40 @@ app = FastAPI(
 )
 
 
+# ─── API PREFIX REWRITE MIDDLEWARE (ASGI) ────────────────────────────────────
+
+class ApiPrefixMiddleware:
+    """
+    Pure ASGI middleware that transparently rewrites `/api/*` to `/*`.
+    Ensures routes match whether called directly (/auth/login) or via
+    Vercel serverless proxy (/api/auth/login) without buffering streaming responses.
+    """
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") in ("http", "websocket"):
+            path = scope.get("path", "")
+            if path.startswith("/api/"):
+                scope["path"] = path[4:]
+            elif path == "/api":
+                scope["path"] = "/"
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(ApiPrefixMiddleware)
+
+
 # ─── CORS ────────────────────────────────────────────────────────────────────
+
+cors_origins = [settings.FRONTEND_URL, "http://localhost:3000"]
+if "http://localhost:3000" not in cors_origins:
+    cors_origins.append("http://localhost:3000")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL, "http://localhost:3000"],
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -127,10 +149,24 @@ app.include_router(notes.router)
 
 @app.get("/health", tags=["Health"])
 def health_check():
+    safe_db_url = engine.url.render_as_string(hide_password=True)
+    db_status = "connected"
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as e:
+        db_status = f"unreachable: {type(e).__name__}"
+
+    is_healthy = db_status == "connected"
     return {
-        "status": "healthy",
+        "status": "healthy" if is_healthy else "degraded",
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
+        "database": {
+            "status": db_status,
+            "dialect": engine.url.get_backend_name(),
+            "url": safe_db_url,
+        },
     }
 
 
@@ -141,3 +177,7 @@ def root():
         "docs": "/docs",
         "version": settings.APP_VERSION,
     }
+
+
+# Vercel Serverless Function entrypoint alias
+handler = app
